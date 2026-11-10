@@ -1,0 +1,44 @@
+@startuml
+!pragma layout smetana
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+interface "MonitorController.View" as View
+class MonitorPanel {
+  -overview: DashboardPane
+  -monitoring: MonitoringPane
+  -controller: MonitorController
+  -results: Map<District,Result>
+  -trends: Map<District,List<Reading>>
+  +bind(controller: MonitorController): void
+  +loading(value: boolean): void
+  +reportSaving(value: boolean): void
+  +reading(item: District, result: Result, recent: List<Reading>): void
+}
+class MonitorController {
+  -refreshing: AtomicBoolean
+  -saving: AtomicBoolean
+  +refresh(district: District): void
+  +refreshAll(): void
+  +saveReport(district: District, issue: Issue, text: String): void
+}
+class DashboardPane {
+  ~render(district: District, result: Result, source: String): void
+}
+class MonitoringPane {
+  -districts: DefaultTableModel
+  -samples: DefaultTableModel
+  -chart: TrendChart
+  ~render(selected: District, states: Map<District,Result>, history: List<Reading>, origin: Function<Result,String>): void
+}
+class TrendChart {
+  -samples: List<Reading>
+  ~setHistory(district: District, history: List<Reading>): void
+  #paintComponent(graphics: Graphics): void
+}
+MonitorPanel ..|> View
+MonitorController "1" --> "1" View : UI output contract
+MonitorPanel "1" *-- "1" DashboardPane
+MonitorPanel "1" *-- "1" MonitoringPane
+MonitoringPane "1" *-- "1" TrendChart
+@enduml

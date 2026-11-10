@@ -13,7 +13,9 @@ java -jar target/kl-air-and-parks-1.0.0.jar
 java -jar target/kl-air-and-parks-1.0.0.jar --live-check
 ```
 
-Select a district and press **Refresh district**. A live response displays model validity and fetch time; if the API fails, the interface shows a dated cached response or explicitly says data is unavailable. Advice is general guidance. Citizen reports are saved locally and are not transmitted to the authorities. Preferences and records live under `.kl-air-and-parks` in the user's home directory; keep the folder private. Historical observations and alerts shown in the interface are session-only. No application secrets or location permissions are required.
+Select a district and press **Refresh district** (or Ctrl+R). Overview displays the U.S. AQI, pollutant concentrations, model time and fetch time. **Compare all areas** refreshes the three pilot districts in sequence and shows their state in Monitoring. The trend plots distinct model hours from this session only, with an exact-value table next to it. A failed request shows the dated cache or explicitly says data is unavailable. Similar or equal readings can result from the same CAMS grid cell.
+
+Advice is general guidance. Citizen reports stay on this device and are not sent to authorities. The report form blocks a second save while one is pending. Preferences and records live under `.kl-air-and-parks` in the user's home directory; keep it private. Alerts shown in the interface are session-only. The Data & impact tab explains provenance, SDG scope and keyboard controls. No application secrets or location permissions are required.
 
 The standard build runs deterministic tests and fails below 75% JaCoCo line coverage. Test XML is under `target/surefire-reports`, and JaCoCo HTML/XML under `target/site/jacoco`. The test-only desktop harness uses a separate temporary store, makes one real request, then executes clearly labelled local HTTP fixtures. For Windows use a semicolon in the class path; on macOS/Linux use a colon.
 

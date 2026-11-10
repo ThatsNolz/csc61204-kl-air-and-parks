@@ -26,11 +26,57 @@ class SwingFlowTest {
     @Test void refresh_dashboardAndComparison_showReadingAndTimestamp() throws Exception {
         usePanel(p -> {
             button(p, "refresh").doClick(0);
-            assertTrue(area(p, "dashboard").getText().contains("U.S. AQI 110"));
-            assertTrue(area(p, "comparison").getText().contains("Recent live model hours"));
-            assertTrue(area(p, "dashboard").getText().contains("PM10: Unavailable"));
+            assertEquals("110", ((JLabel)find(p, "aqiValue")).getText());
+            assertEquals(110, table(p, "districtTable").getValueAt(0, 1));
+            assertEquals(110, table(p, "sampleTable").getValueAt(0, 1));
+            assertEquals("Unavailable", ((JLabel)find(p, "pm10Value")).getText());
             combo(p, "district").setSelectedItem(District.PERDANA);
             assertTrue(area(p, "dashboard").getText().contains("No verified data loaded"));
+        });
+    }
+
+    @Test void refreshAll_emptyComparison_populatesEveryPilotArea() throws Exception {
+        usePanel(p -> {
+            var districts = table(p, "districtTable");
+            assertEquals("Not loaded", districts.getValueAt(0, 3));
+            button(p, "refreshAll").doClick(0);
+            assertAll(() -> assertEquals(District.values().length, districts.getRowCount()),
+                    () -> assertEquals(110, districts.getValueAt(2, 1)),
+                    () -> assertFalse(districts.isCellEditable(0, 1)),
+                    () -> assertEquals(1, table(p, "sampleTable").getRowCount()));
+        });
+    }
+
+    @Test void refresh_chartRendering_keepsMissingValuesOutOfTheDataset() throws Exception {
+        usePanel(p -> {
+            button(p, "refresh").doClick(0);
+            var chart = find(p, "trendChart");
+            chart.setSize(340, 180);
+            var image = new java.awt.image.BufferedImage(340, 180, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var g = image.createGraphics();
+            try { chart.paint(g); } finally { g.dispose(); }
+            assertAll(() -> assertEquals("—", table(p, "sampleTable").getValueAt(0, 3)),
+                    () -> assertNotEquals(image.getRGB(0, 0), image.getRGB(50, 20)),
+                    () -> assertTrue(chart.getAccessibleContext().getAccessibleName().contains("exact values")));
+        });
+    }
+
+    @Test void shortcut_ctrlRefresh_usesTheSameSelectedDistrictAction() throws Exception {
+        usePanel(p -> {
+            combo(p, "district").setSelectedItem(District.PERDANA);
+            p.getActionMap().get("refreshSelected").actionPerformed(new java.awt.event.ActionEvent(p, 0, "refresh"));
+            assertEquals("110", ((JLabel)find(p, "aqiValue")).getText());
+            assertEquals(110, table(p, "districtTable").getValueAt(2, 1));
+        });
+    }
+
+    @Test void reading_controlledView_labelsTheFixtureAndNeverCallsItLive() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var p = new MonitorPanel(Preferences.userRoot().node("csc61204-test/fixture-label"), true);
+            var sample = reading(District.TITIWANGSA, 42, 0);
+            p.reading(District.TITIWANGSA, new ReadingService.Result(ReadingService.State.LIVE, sample, "Provider ok"), java.util.List.of(sample));
+            assertEquals("TEST FIXTURE", ((JLabel)find(p, "readingSource")).getText());
+            assertFalse(area(p, "dashboard").getText().contains("LIVE API"));
         });
     }
     @Test void advice_profileSwitch_rendersDifferentAdviceAndPark() throws Exception {
@@ -88,4 +134,5 @@ class SwingFlowTest {
     private static JTextArea area(MonitorPanel p, String n) { return (JTextArea) find(p, n); }
     private static JButton button(MonitorPanel p, String n) { return (JButton) find(p, n); }
     private static JComboBox<?> combo(MonitorPanel p, String n) { return (JComboBox<?>) find(p, n); }
+    private static JTable table(MonitorPanel p, String n) { return (JTable) find(p, n); }
 }

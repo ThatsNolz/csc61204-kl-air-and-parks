@@ -11,6 +11,7 @@ import cityair.view.MonitorPanel;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.awt.BorderLayout;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,6 +35,7 @@ public final class DesktopEvidence {
     private final Preferences prefs = Preferences.userRoot().node("csc61204-evidence/" + UUID.randomUUID());
     private final java.util.concurrent.ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicInteger response = new AtomicInteger(500);
+    private final AtomicInteger fixtureAqi = new AtomicInteger(79);
     private MonitorPanel panel;
     private JFrame frame;
 
@@ -53,7 +55,12 @@ public final class DesktopEvidence {
             waitText("dashboard", "LIVE API");
             shot("IT-02-live-api");
             tab(1);
+            action("refreshAll");
+            waitEnabled("refreshAll");
+            assertDistrictTable();
             shot("GUI-district-monitoring");
+            tab(5);
+            shot("GUI-data-and-impact");
             tab(3);
             onEdt(() -> area("description").setText("Test observation: smoke near a park entrance."));
             action("save");
@@ -61,6 +68,9 @@ public final class DesktopEvidence {
             shot("IT-01-save-report");
             action("save");
             waitText("status", "10 to 500");
+            if (new ReportStore(temporary).list().size() != 1) {
+                throw new AssertionError("A blank input changed the stored report count.");
+            }
             shot("IT-05-invalid-input");
             close();
             localCases(server.getAddress().getPort());
@@ -82,9 +92,16 @@ public final class DesktopEvidence {
         tab(4);
         onEdt(() -> ((JCheckBox) find(panel, "subscription")).doClick(0));
         action("refresh");
+        waitText("dashboard", "TEST FIXTURE");
+        waitText("aqiValue", "79");
+        waitText("latestAlert", "No notifications");
+        fixtureAqi.set(115);
+        action("refresh");
         waitText("notifications", "crossed 101");
         waitText("latestAlert", "Pollution alert");
         shot("IT-04-observer-threshold");
+        tab(1);
+        shot("GUI-controlled-trend");
         tab(2);
         onEdt(() -> ((JComboBox<?>) find(panel, "profile")).setSelectedItem(AdviceProfile.CHILDREN));
         waitText("advice", "Shorten vigorous outdoor play");
@@ -95,9 +112,12 @@ public final class DesktopEvidence {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/air-quality", e -> {
             try (e) {
-                String future = java.time.LocalDateTime.now(OpenMeteoClient.ZONE).plusDays(1)
+                int aqi = fixtureAqi.get();
+                int hours = aqi == 79 ? 1 : 2;
+                String future = java.time.LocalDateTime.now(OpenMeteoClient.ZONE).plusHours(hours)
                         .withSecond(0).withNano(0).toString();
-                String body = ApiTest.GOOD.replace("2026-11-10T15:00", future).replace("\"us_aqi\":79", "\"us_aqi\":115");
+                String body = ApiTest.GOOD.replace("2026-11-10T15:00", future)
+                        .replace("\"us_aqi\":79", "\"us_aqi\":" + aqi);
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 e.sendResponseHeaders(response.get(), bytes.length);
                 e.getResponseBody().write(bytes);
@@ -113,11 +133,18 @@ public final class DesktopEvidence {
         var api = new OpenMeteoClient(endpoint, http, Duration.ofSeconds(12), Clock.systemUTC());
         var service = new ReadingService(api, new ReadingCache(temporary.resolve("cache")), alerts);
         onEdt(() -> {
-            panel = new MonitorPanel(prefs);
+            panel = new MonitorPanel(prefs, !endpoint.equals(OpenMeteoClient.ENDPOINT));
             panel.bind(new MonitorController(service, new ReportStore(temporary), alerts, worker,
                     SwingUtilities::invokeLater, Clock.systemUTC(), panel));
             frame = new JFrame("Kuala Lumpur Air & Parks | " + mode);
-            frame.setContentPane(panel);
+            var content = new JPanel(new BorderLayout());
+            if (!endpoint.equals(OpenMeteoClient.ENDPOINT)) {
+                var fixture = new JLabel("TEST ONLY: requests go to a controlled local HTTP server.", SwingConstants.CENTER);
+                fixture.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+                content.add(fixture, BorderLayout.NORTH);
+            }
+            content.add(panel, BorderLayout.CENTER);
+            frame.setContentPane(content);
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setAlwaysOnTop(true);
@@ -134,6 +161,26 @@ public final class DesktopEvidence {
     }
 
     private JTextArea area(String name) { return (JTextArea) find(panel, name); }
+
+    private void waitEnabled(String name) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(40).toNanos();
+        while (System.nanoTime() < deadline) {
+            var ready = new java.util.concurrent.atomic.AtomicBoolean();
+            onEdt(() -> ready.set(find(panel, name).isEnabled()));
+            if (ready.get()) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError(name + " remained disabled");
+    }
+
+    private void assertDistrictTable() throws Exception {
+        onEdt(() -> {
+            var table = (JTable) find(panel, "districtTable");
+            for (int i = 0; i < table.getRowCount(); i++) {
+                if ("Not loaded".equals(table.getValueAt(i, 3))) throw new AssertionError("Missing comparison attempt");
+            }
+        });
+    }
 
     private void waitText(String name, String expected) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(18).toNanos();

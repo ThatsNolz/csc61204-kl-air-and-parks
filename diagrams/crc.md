@@ -24,3 +24,8 @@
 | Responsibilities | Collaborators |
 |---|---|
 | Bind each built-in audience to a distinct advice policy. | AdviceStrategy, AirCategory |
+
+## MonitoringPane
+| Responsibilities | Collaborators |
+|---|---|
+| Build read-only district and sample rows from the latest view snapshots; expose exact model times and missing values next to the trend. | MonitorPanel, TrendChart, Reading, ReadingService.Result |
