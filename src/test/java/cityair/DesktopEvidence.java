@@ -11,6 +11,7 @@ import cityair.view.MonitorPanel;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.awt.BorderLayout;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,6 +35,7 @@ public final class DesktopEvidence {
     private final Preferences prefs = Preferences.userRoot().node("csc61204-evidence/" + UUID.randomUUID());
     private final java.util.concurrent.ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicInteger response = new AtomicInteger(500);
+    private final AtomicInteger fixtureAqi = new AtomicInteger(79);
     private MonitorPanel panel;
     private JFrame frame;
 
@@ -61,6 +63,9 @@ public final class DesktopEvidence {
             shot("IT-01-save-report");
             action("save");
             waitText("status", "10 to 500");
+            if (new ReportStore(temporary).list().size() != 1) {
+                throw new AssertionError("A blank input changed the stored report count.");
+            }
             shot("IT-05-invalid-input");
             close();
             localCases(server.getAddress().getPort());
@@ -82,6 +87,11 @@ public final class DesktopEvidence {
         tab(4);
         onEdt(() -> ((JCheckBox) find(panel, "subscription")).doClick(0));
         action("refresh");
+        waitText("dashboard", "LIVE API");
+        waitText("dashboard", "U.S. AQI 79");
+        waitText("latestAlert", "No notifications");
+        fixtureAqi.set(115);
+        action("refresh");
         waitText("notifications", "crossed 101");
         waitText("latestAlert", "Pollution alert");
         shot("IT-04-observer-threshold");
@@ -95,9 +105,12 @@ public final class DesktopEvidence {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/air-quality", e -> {
             try (e) {
-                String future = java.time.LocalDateTime.now(OpenMeteoClient.ZONE).plusDays(1)
+                int aqi = fixtureAqi.get();
+                int hours = aqi == 79 ? 1 : 2;
+                String future = java.time.LocalDateTime.now(OpenMeteoClient.ZONE).plusHours(hours)
                         .withSecond(0).withNano(0).toString();
-                String body = ApiTest.GOOD.replace("2026-11-10T15:00", future).replace("\"us_aqi\":79", "\"us_aqi\":115");
+                String body = ApiTest.GOOD.replace("2026-11-10T15:00", future)
+                        .replace("\"us_aqi\":79", "\"us_aqi\":" + aqi);
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 e.sendResponseHeaders(response.get(), bytes.length);
                 e.getResponseBody().write(bytes);
@@ -117,7 +130,14 @@ public final class DesktopEvidence {
             panel.bind(new MonitorController(service, new ReportStore(temporary), alerts, worker,
                     SwingUtilities::invokeLater, Clock.systemUTC(), panel));
             frame = new JFrame("Kuala Lumpur Air & Parks | " + mode);
-            frame.setContentPane(panel);
+            var content = new JPanel(new BorderLayout());
+            if (!endpoint.equals(OpenMeteoClient.ENDPOINT)) {
+                var fixture = new JLabel("TEST ONLY: requests go to a controlled local HTTP server.", SwingConstants.CENTER);
+                fixture.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+                content.add(fixture, BorderLayout.NORTH);
+            }
+            content.add(panel, BorderLayout.CENTER);
+            frame.setContentPane(content);
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setAlwaysOnTop(true);
