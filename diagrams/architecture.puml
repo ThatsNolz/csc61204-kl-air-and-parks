@@ -1,0 +1,23 @@
+@startuml
+!pragma layout smetana
+skinparam shadowing false
+skinparam monochrome true
+top to bottom direction
+rectangle "GUI layer\nMonitorPanel (Swing EDT)" as UI
+rectangle "Controller\nMonitorController" as CTL
+rectangle "Service layer\nReadingService / AlertMonitor" as SVC
+rectangle "Domain model\nDistrict / Reading / CitizenReport / AdviceStrategy" as DOMAIN
+rectangle "API layer\nAirQualityGateway / OpenMeteoClient" as API
+database "Local JSON\nReadingCache / ReportStore" as STORE
+cloud "Open-Meteo / CAMS Global" as WEB
+UI --> CTL : selected district / report / subscription
+CTL --> SVC : refresh on background executor
+CTL --> STORE : validated report and list
+SVC --> API : modeled reading query
+SVC --> STORE : last verified reading
+API --> WEB : HTTPS GET and JSON
+API --> DOMAIN : map typed values
+SVC --> DOMAIN : validate reading and crossing
+SVC ..> CTL : result and observer callback
+CTL ..> UI : EDT updates
+@enduml

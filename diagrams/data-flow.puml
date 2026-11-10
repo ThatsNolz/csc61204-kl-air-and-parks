@@ -1,0 +1,24 @@
+@startuml
+!pragma layout smetana
+skinparam monochrome true
+actor Resident
+rectangle "1 Refresh model estimate" as Fetch
+rectangle "2 Contextualize activity and parks" as Advice
+rectangle "3 Validate and save report" as Report
+rectangle "4 Evaluate thresholds" as Alert
+database "Last verified reading per district" as Cache
+database "Local citizen reports" as Store
+cloud "Open-Meteo" as API
+Resident --> Fetch : district
+Fetch --> API : coordinates and fields
+API --> Fetch : model time, AQI, pollutants
+Fetch <--> Cache : validated result / fallback
+Fetch --> Advice : tagged reading
+Resident --> Advice : advice profile
+Advice --> Resident : activity advice and verified park
+Resident --> Report : category and observation
+Report --> Store : validated report
+Report --> Resident : confirmation and local history
+Fetch --> Alert : live reading only
+Alert --> Resident : crossing notification and history
+@enduml

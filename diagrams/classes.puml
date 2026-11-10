@@ -1,0 +1,91 @@
+@startuml
+!pragma layout smetana
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+interface AirQualityGateway {
+ +fetch(district: District): Reading
+}
+class OpenMeteoClient {
+ -endpoint: URI
+ -http: HttpClient
+ -json: ObjectMapper
+ -timeout: Duration
+ -clock: Clock
+ {static} +ENDPOINT: URI
+ {static} +ZONE: ZoneId
+ {static} -OK, REDIRECT, NOT_FOUND_STATUS, RATE_STATUS, SERVER_STATUS: int
+ {static} -FIELDS: String
+ +OpenMeteoClient(endpoint: URI, http: HttpClient, timeout: Duration, clock: Clock)
+ +fetch(district: District): Reading
+ -requestUri(district: District): URI
+ {static} -checkStatus(status: int): void
+ -parse(district: District, body: String): Reading
+ -toReading(district: District, current: JsonNode): Reading
+ {static} -pollutant(current: JsonNode, field: String): Double
+}
+class ReadingService {
+ {static} -HISTORY_LIMIT: int
+ {static} -LOGGER: Logger
+ -api: AirQualityGateway
+ -cache: ReadingCache
+ -monitor: AlertMonitor
+ -memory: Map<District,Reading>
+ -history: Map<District,ArrayDeque<Reading>>
+ +ReadingService(api: AirQualityGateway, cache: ReadingCache, monitor: AlertMonitor)
+ +refresh(district: District): Result
+ +history(district: District): List<Reading>
+ -remember(reading: Reading): void
+ -fallback(district: District, message: String): Result
+ -cached(district: District): Reading
+}
+class ReadingCache {
+ -folder: Path
+ +ReadingCache(folder: Path)
+ +load(district: District): Optional<Reading>
+ +save(reading: Reading): void
+ -file(district: District): Path
+}
+class AlertMonitor {
+ {static} +DEFAULT_THRESHOLD: int
+ {static} -HISTORY_LIMIT: int
+ {static} -LOGGER: Logger
+ -threshold: int
+ -latest: Map<District,Reading>
+ -subscriptions: Map<District,Set<PollutionObserver>>
+ -history: ArrayDeque<Alert>
+ +AlertMonitor(threshold: int)
+ +subscribe(district: District, observer: PollutionObserver): void
+ +unsubscribe(district: District, observer: PollutionObserver): void
+ +history(): List<Alert>
+ +threshold(): int
+ +publish(reading: Reading): void
+ -crossed(reading: Reading): boolean
+ {static} -notifyListener(listener: PollutionObserver, alert: Alert): void
+}
+interface PollutionObserver {
+ +onAlert(alert: Alert): void
+}
+interface AdviceStrategy {
+ +advice(category: AirCategory): String
+}
+enum AdviceProfile {
+ GENERAL
+ CHILDREN
+ OLDER_ADULTS
+ -label: String
+ -strategy: AdviceStrategy
+ -AdviceProfile(label: String, strategy: AdviceStrategy)
+ +strategy(): AdviceStrategy
+ +toString(): String
+ {static} -general(category: AirCategory): String
+ {static} -children(category: AirCategory): String
+ {static} -olderAdults(category: AirCategory): String
+}
+OpenMeteoClient ..|> AirQualityGateway
+ReadingService "1" --> "1" AirQualityGateway : calls
+ReadingService "1" --> "1" ReadingCache : uses
+ReadingService "1" --> "1" AlertMonitor : publishes to
+AlertMonitor "1" --> "0..*" PollutionObserver : notifies
+AdviceProfile "1" --> "1" AdviceStrategy : selects method reference
+@enduml

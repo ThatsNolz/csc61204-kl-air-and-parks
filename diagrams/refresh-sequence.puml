@@ -1,0 +1,26 @@
+@startuml
+skinparam monochrome true
+actor Resident
+participant MonitorPanel
+participant MonitorController
+participant ReadingService
+participant OpenMeteoClient
+participant ReadingCache
+participant AlertMonitor
+Resident -> MonitorPanel: Choose district and refresh
+MonitorPanel -> MonitorController: refresh(district)
+MonitorController -> MonitorPanel: loading(true) on EDT
+MonitorController ->> ReadingService: worker refresh(district)
+ReadingService -> OpenMeteoClient: fetch(district)
+alt 2xx and validated current model hour
+OpenMeteoClient --> ReadingService: Reading
+ReadingService -> ReadingCache: save(Reading)
+ReadingService -> AlertMonitor: publish(Reading)
+else transport, response or validation failure
+OpenMeteoClient --> ReadingService: ApiFailure
+ReadingService -> ReadingCache: load(district)
+ReadingCache --> ReadingService: verified cache or empty
+end
+ReadingService --> MonitorController: LIVE / CACHED / UNAVAILABLE
+MonitorController ->> MonitorPanel: loading(false) + reading on EDT
+@enduml
