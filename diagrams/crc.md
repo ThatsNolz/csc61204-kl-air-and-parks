@@ -1,9 +1,9 @@
 # Class Responsibility Collaborator cards
 
-## MonitorController
+## ReadingCache
 | Responsibilities | Collaborators |
 |---|---|
-| Route district refresh and report actions; move I/O off the EDT; deliver completed results to the view. | View, ReadingService, AlertMonitor, ReportStore |
+| Load and save one validated reading per district on disk. Resolve per-district files and leave the source decision to the service. | ReadingService, Reading, District |
 
 ## ReadingService
 | Responsibilities | Collaborators |
