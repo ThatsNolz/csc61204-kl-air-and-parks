@@ -53,6 +53,7 @@ class ApiTest {
 
     @Test void fetch_closedEndpoint_returnsNetworkError() throws IOException {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.start();
         int port = server.getAddress().getPort();
         server.stop(0);
         assertEquals(ApiFailure.Kind.NETWORK, assertThrows(ApiFailure.class, () -> client(port).fetch(TITIWANGSA)).kind());
