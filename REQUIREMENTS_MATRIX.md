@@ -1,0 +1,30 @@
+# CSC61204 requirements traceability
+
+Sources are the attached 10-page September 2026 assignment brief (B) and 1-page formative timeline (T). Scenario 5 was selected because no existing CSC61204 project or scenario was found in the searched workspace or the signed-in GitHub account. Status is tracked separately in PROJECT_STATUS.md.
+
+| ID | Authority | Requirement and acceptance | Component / test and evidence | Report / rubric |
+|---|---|---|---|---|
+| ADM-01 | B1–2 | Four to five students, or lecturer approval for this proposed two-person team. Complete name, ID, signature, group name, scenario and public repository URL. | Official cover, actual students and approval. | Cover / compliance |
+| FR-001 | B3 | Track model readings by Kuala Lumpur pilot district, showing time, AQI standard, pollutant units and source. | District, Reading, OpenMeteoClient, MonitorPanel / ApiTest, IT-02. | 1, 3, 5 / A12, A22, A12 |
+| FR-002 | B3 | Swap general, child and older-adult advice through Strategy. | AdviceStrategy / DomainTest, IT-04. | 3.3, 4.1, 5.1 / A22, A20 |
+| FR-003 | B3 | Publish threshold-crossing alerts by district through Observer. Subscription, removal, duplicate suppression and session alert history. | AlertMonitor, PollutionObserver / AlertTest, IT-04. | 3.3, 4.1 / A22, A20 |
+| FR-004 | B3 | Recommend verified nearby parks with district AQI context and no false claim of park-level air quality. | CityCatalog, AdviceStrategy, MonitorPanel / DomainTest, IT-04. | 1, 5.1, 6 / A12, A4 |
+| FR-005 | B3 | Validate, locally save and list citizen reports. | CitizenReport, ReportStore, MonitorController / StoreTest, IT-01, IT-05. | 3, 5.1 / A22, A12 |
+| FR-006 | User scope | Show district comparison, bounded recent observations, subscription preferences and distinct data states. | ReadingService, MonitorPanel / ReadingTest, IT-03. | 5 / A12 |
+| NFR-001 | B5 | Handle 2xx, 404, 500, timeout, disconnect and malformed/missing data. Display last verified response and its time, or unavailable. | OpenMeteoClient, ReadingService / ApiTest, IT-03. | 5.2 / A12 |
+| NFR-002 | B5 and user scope | Clear MVC, responsive EDT, accessible named controls, useful loading, empty and error states. | MonitorController, MonitorPanel / ControllerTest, IT-01–05. | 5.1 / A12 |
+| NFR-003 | B4, B7 | Self-documenting naming, methods under 20 lines, CC under 10, named domain constants, Javadoc on public APIs, explained SRP and OCP. | Source, quality audit / local static analysis. | 4.1 / A20 |
+| NFR-004 | B4, B7 | JUnit 5, 25+ tests using required naming, three parameterized methods, two assertThrows and one assertAll. JaCoCo line coverage ≥75% with screenshot. One isolated actual failure and explanation. | Maven verify, JaCoCo, opt-in failure, test results. | 4.2, App A / A20 |
+| NFR-005 | B5, B7, B9 | Five integration categories in Template 1, authentic screenshot per case and three distinct real GUI screens. | IT-01–05, evidence. | 5 / A12 |
+| DOC-01 | B3–6 | Sections 1–7 in exact order. S1 and S6 300–400 each, S2–S5 400–500 each. Total 2,500–3,200 excluding cover, references, appendices, diagrams, tables, images and code. | Practical overlap is 2,500–2,800. Report outline and verifier. | A70 |
+| DOC-02 | B3–4, B7 | Urban context, proposed operator, named beneficiary, justified audience estimate, stakeholder table, SDG 11.6/11.7, literature comparison/gap, GoF and recent application, Java documentation and quantified primary research. APA 7 ≥8, no Wikipedia. | Sources and report. | 1–2 / A12 |
+| DOC-03 | B4, B7 | Labelled GUI, service, domain and API architecture. UML ≥6 classes with fields, signatures, visibility, IS-A/HAS-A and multiplicities. Four CRC cards in two columns. Pattern before/after, SOLID, alternatives. | Diagrams and CRC. Sequence/use case/data flow requested additions. | 3 / A22 |
+| DOC-04 | B4–6, B7, B9 | Code ≤30 lines per excerpt, identify class/method, Courier New. Body TNR/Calibri 12, 1.5 spacing, 2.54 cm margins, tables/code single. Template 2 per actual test, accurate Appendix B AI declaration. | DOCX/PDF review, appendices, source repository. | 4, 7 / A20 |
+| DOC-05 | B5, B7 | Reflection names beneficiary, measurable proposed change and source, two gain/loss trade-offs, two rollout changes for 5,000 simultaneous users, one real team challenge/resolution. | Section 6 and team-supplied event. | 6 / A4 |
+| GIT-01 | B6, B10 | Public URL on cover, ≥15 real commits, two PRs merged after passing CI, green main, screenshot. | git history, PR URLs, Actions URL and screenshot. | 4, 5 / B1 |
+| LIVE-01 | B6, B8–9 | 35 minutes total, 15-minute group presentation plus 20-minute individual Q&A, physical presence, GUI, live API and parsed data, green main and testing, numbered SDG with beneficiary/source. At least two technical questions per member. | PPTX, demo, two study guides, actual attendance. | B1 5+3+2, B2 6+8+4+2 per student |
+| SUB-01 | B1, B6, B9–10 | 1 December 2026, Week 11. One GroupName_CSC61204_GroupAssignment.zip with report, executable JAR, run README, GroupName_CSC61204_Presentation.pptx and genuine Turnitin and AI reports. | Launch test, package audit, MyTimes submission. | Compliance |
+| INT-01 | B9–10 | Declare AI code and writing. Explain code personally. >20% AI writing −20, >20% Turnitin −10, bad citation −5, generic/originality −5 to −10, 1–5 days late −5% to −20% per day, beyond five days zero. Checklist asks for both reports below 20%; aim below 20, disclose use. | Actual university reports and student verification. No invented collaboration or results. | Part C |
+| TIME-01 | T1 | Formative 3-minute check-ins on Oct 5, Oct 19, Nov 2, Nov 16, Nov 23. Dec 1 submission/live assessment. First three dates passed. | Recovery schedule and two demonstrations. | Formative |
+
+The cover uses CSC62604/CSC61204 as printed and the report uses CSC61204. Scenario 5 specifies Strategy and Observer. Open-Meteo CAMS estimates are modeled for representative coordinates and cannot resolve neighborhood or park-level exposure. The 4–5 member rule and real student contribution are separate from technical completion.
