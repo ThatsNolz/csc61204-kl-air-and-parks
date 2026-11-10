@@ -1,0 +1,10 @@
+/target/
+/evidence/
+/submission/
+/docs/report/
+/presentation/
+/qa-preparation/
+*.iml
+.idea/
+*.log
+
