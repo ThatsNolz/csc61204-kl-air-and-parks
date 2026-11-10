@@ -7,9 +7,11 @@ participant ReadingService
 participant OpenMeteoClient
 participant ReadingCache
 participant AlertMonitor
-Resident -> MonitorPanel: Choose district and refresh
-MonitorPanel -> MonitorController: refresh(district)
+Resident -> MonitorPanel: Refresh area or Compare all areas
+MonitorPanel -> MonitorController: refresh(district) or refreshAll()
+MonitorController -> MonitorController: Admit one refresh task
 MonitorController -> MonitorPanel: loading(true) on EDT
+loop One selected area or each pilot area in order
 MonitorController ->> ReadingService: worker refresh(district)
 ReadingService -> OpenMeteoClient: fetch(district)
 alt 2xx and validated current model hour
@@ -22,5 +24,7 @@ ReadingService -> ReadingCache: load(district)
 ReadingCache --> ReadingService: verified cache or empty
 end
 ReadingService --> MonitorController: LIVE / CACHED / UNAVAILABLE
-MonitorController ->> MonitorPanel: loading(false) + reading on EDT
+MonitorController ->> MonitorPanel: reading and samples on EDT
+end
+MonitorController ->> MonitorPanel: loading(false) on EDT
 @enduml

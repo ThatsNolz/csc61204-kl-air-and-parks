@@ -43,6 +43,31 @@ class ControllerTest {
         controller(d -> { throw new IllegalStateException("fixture"); }, Runnable::run).refresh(TITIWANGSA);
         assertAll(() -> assertFalse(view.busy), () -> assertTrue(view.error), () -> assertNotNull(view.message));
     }
+    @Test void refreshAll_queuedTwice_makesOneOrderedBatch() {
+        var queue = new ArrayDeque<Runnable>();
+        var visits = new java.util.ArrayList<District>();
+        var ctl = controller(d -> { visits.add(d); return reading(d, 55, 0); }, queue::add);
+        ctl.refreshAll();
+        ctl.refresh(TITIWANGSA);
+        assertTrue(view.busy);
+        assertEquals(1, queue.size());
+        queue.remove().run();
+        assertAll(() -> assertEquals(List.of(District.values()), visits), () -> assertFalse(view.busy));
+    }
+    @Test void refreshAll_oneDistrictFails_deliversOtherDistricts() {
+        var ctl = controller(d -> {
+            if (d == TITIWANGSA) throw new IllegalStateException("controlled crash");
+            return reading(d, 55, 0);
+        }, Runnable::run);
+        ctl.refreshAll();
+        assertAll(() -> assertFalse(view.busy), () -> assertEquals(2, view.reads),
+                () -> assertEquals(District.PERDANA, view.result.reading().district()));
+    }
+    @Test void refresh_workerRejects_releasesBusyControls() {
+        controller(d -> reading(d, 55, 0), r -> { throw new java.util.concurrent.RejectedExecutionException(); })
+                .refresh(TITIWANGSA);
+        assertAll(() -> assertFalse(view.busy), () -> assertTrue(view.error));
+    }
     @Test void saveReport_validInput_displaysPersistedEntry() {
         controller(d -> reading(d, 40, 0), Runnable::run)
                 .saveReport(TITIWANGSA, CitizenReport.Issue.DUST, "Dust observed at the entrance.");
@@ -55,6 +80,20 @@ class ControllerTest {
     @Test void saveReport_missingDistrict_displaysFriendlyError() {
         controller(d -> reading(d, 40, 0), Runnable::run).saveReport(null, CitizenReport.Issue.DUST, "Valid length.");
         assertEquals("Choose a district and issue.", view.message);
+    }
+    @Test void saveReport_whileAnotherSaveIsPending_persistsOnlyOneObservation() {
+        var queue = new ArrayDeque<Runnable>();
+        var ctl = controller(d -> reading(d, 55, 0), queue::add);
+        ctl.saveReport(TITIWANGSA, CitizenReport.Issue.SMOKE, "First report near the park.");
+        ctl.saveReport(TITIWANGSA, CitizenReport.Issue.SMOKE, "Second button click.");
+        assertAll(() -> assertTrue(view.saving), () -> assertEquals(1, queue.size()));
+        queue.remove().run();
+        assertAll(() -> assertFalse(view.saving), () -> assertEquals(1, view.entries.size()));
+    }
+    @Test void saveReport_workerRejects_unlocksFormWithClearMessage() {
+        controller(d -> reading(d, 55, 0), r -> { throw new java.util.concurrent.RejectedExecutionException(); })
+                .saveReport(TITIWANGSA, CitizenReport.Issue.DUST, "Dust observed at the entrance.");
+        assertAll(() -> assertFalse(view.saving), () -> assertTrue(view.error));
     }
     @Test void subscribe_crossing_dispatchesAlertToView() {
         var ctl = controller(d -> reading(d, 110, 0), Runnable::run);
@@ -75,13 +114,15 @@ class ControllerTest {
     }
 
     private static final class View implements MonitorController.View {
-        boolean busy, error;
+        boolean busy, error, saving;
+        int reads;
         String message;
         List<CitizenReport> entries = List.of();
         ReadingService.Result result;
         AlertMonitor.Alert delivered;
         public void loading(boolean value) { busy = value; }
-        public void reading(District d, ReadingService.Result r, List<Reading> recent) { result = r; }
+        public void reading(District d, ReadingService.Result r, List<Reading> recent) { result = r; reads++; }
+        public void reportSaving(boolean value) { saving = value; }
         public void reports(List<CitizenReport> entries) { this.entries = entries; }
         public void message(String m, boolean error) { message = m; this.error = error; }
         public void alert(List<AlertMonitor.Alert> history, AlertMonitor.Alert alert) { if (alert != null) delivered = alert; }
