@@ -55,7 +55,12 @@ public final class DesktopEvidence {
             waitText("dashboard", "LIVE API");
             shot("IT-02-live-api");
             tab(1);
+            action("refreshAll");
+            waitEnabled("refreshAll");
+            assertDistrictTable();
             shot("GUI-district-monitoring");
+            tab(5);
+            shot("GUI-data-and-impact");
             tab(3);
             onEdt(() -> area("description").setText("Test observation: smoke near a park entrance."));
             action("save");
@@ -87,14 +92,16 @@ public final class DesktopEvidence {
         tab(4);
         onEdt(() -> ((JCheckBox) find(panel, "subscription")).doClick(0));
         action("refresh");
-        waitText("dashboard", "LIVE API");
-        waitText("dashboard", "U.S. AQI 79");
+        waitText("dashboard", "TEST FIXTURE");
+        waitText("aqiValue", "79");
         waitText("latestAlert", "No notifications");
         fixtureAqi.set(115);
         action("refresh");
         waitText("notifications", "crossed 101");
         waitText("latestAlert", "Pollution alert");
         shot("IT-04-observer-threshold");
+        tab(1);
+        shot("GUI-controlled-trend");
         tab(2);
         onEdt(() -> ((JComboBox<?>) find(panel, "profile")).setSelectedItem(AdviceProfile.CHILDREN));
         waitText("advice", "Shorten vigorous outdoor play");
@@ -126,7 +133,7 @@ public final class DesktopEvidence {
         var api = new OpenMeteoClient(endpoint, http, Duration.ofSeconds(12), Clock.systemUTC());
         var service = new ReadingService(api, new ReadingCache(temporary.resolve("cache")), alerts);
         onEdt(() -> {
-            panel = new MonitorPanel(prefs);
+            panel = new MonitorPanel(prefs, !endpoint.equals(OpenMeteoClient.ENDPOINT));
             panel.bind(new MonitorController(service, new ReportStore(temporary), alerts, worker,
                     SwingUtilities::invokeLater, Clock.systemUTC(), panel));
             frame = new JFrame("Kuala Lumpur Air & Parks | " + mode);
@@ -154,6 +161,26 @@ public final class DesktopEvidence {
     }
 
     private JTextArea area(String name) { return (JTextArea) find(panel, name); }
+
+    private void waitEnabled(String name) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(40).toNanos();
+        while (System.nanoTime() < deadline) {
+            var ready = new java.util.concurrent.atomic.AtomicBoolean();
+            onEdt(() -> ready.set(find(panel, name).isEnabled()));
+            if (ready.get()) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError(name + " remained disabled");
+    }
+
+    private void assertDistrictTable() throws Exception {
+        onEdt(() -> {
+            var table = (JTable) find(panel, "districtTable");
+            for (int i = 0; i < table.getRowCount(); i++) {
+                if ("Not loaded".equals(table.getValueAt(i, 3))) throw new AssertionError("Missing comparison attempt");
+            }
+        });
+    }
 
     private void waitText(String name, String expected) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(18).toNanos();

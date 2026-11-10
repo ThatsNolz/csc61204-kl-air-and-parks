@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -28,6 +30,8 @@ public final class MonitorController {
     private final Clock clock;
     private final View view;
     private final PollutionObserver listener;
+    private final AtomicBoolean refreshing = new AtomicBoolean();
+    private final AtomicBoolean saving = new AtomicBoolean();
 
     /** Output contract independent of concrete Swing controls. */
     public interface View {
@@ -37,6 +41,8 @@ public final class MonitorController {
         void reading(District district, ReadingService.Result result, List<Reading> recent);
         /** Displays the saved report list. */
         void reports(List<CitizenReport> entries);
+        /** Locks or unlocks the report form while a save is pending. */
+        default void reportSaving(boolean value) {}
         /** Shows a brief success or error message. */
         void message(String message, boolean error);
         /** Displays the alert history and latest delivered notification. */
@@ -58,39 +64,76 @@ public final class MonitorController {
 
     /** Schedules retrieval and displays its result on the UI executor. */
     public void refresh(District district) {
+        refresh(List.of(district));
+    }
+
+    /** Schedules a sequential comparison of all pilot areas without overlapping requests. */
+    public void refreshAll() {
+        refresh(List.of(District.values()));
+    }
+
+    private void refresh(List<District> districts) {
+        if (!refreshing.compareAndSet(false, true)) return;
         view.loading(true);
-        background.execute(() -> fetch(district));
+        try {
+            background.execute(() -> runRefresh(districts));
+        } catch (RejectedExecutionException ex) {
+            finishRefresh();
+            view.message("Refresh unavailable while the application is closing.", true);
+        }
+    }
+
+    private void runRefresh(List<District> districts) {
+        try {
+            for (District district : districts) {
+                if (Thread.currentThread().isInterrupted()) break;
+                fetch(district);
+            }
+        } finally {
+            ui.execute(this::finishRefresh);
+        }
     }
 
     private void fetch(District district) {
         try {
             var result = readings.refresh(district);
             var history = readings.history(district);
-            ui.execute(() -> finish(district, result, history));
+            ui.execute(() -> showReading(district, result, history));
         } catch (RuntimeException ex) {
             LOGGER.log(Level.WARNING, "Refresh failed unexpectedly", ex);
-            ui.execute(() -> refreshFailed());
+            ui.execute(() -> view.message("Could not refresh " + district + ".", true));
         }
     }
 
-    private void refreshFailed() {
+    private void finishRefresh() {
+        refreshing.set(false);
         view.loading(false);
-        view.message("The refresh could not be completed.", true);
     }
 
-    private void finish(District district, ReadingService.Result result, List<Reading> history) {
-        view.loading(false);
+    private void showReading(District district, ReadingService.Result result, List<Reading> history) {
         view.reading(district, result, history);
         view.alert(alerts.history(), null);
     }
 
     /** Validates input before scheduling local persistence. */
     public void saveReport(District district, Issue issue, String text) {
+        if (saving.get()) return;
         try {
             var report = new CitizenReport(UUID.randomUUID(), district, issue, text, clock.instant());
-            background.execute(() -> persist(report));
+            queueSave(report);
         } catch (IllegalArgumentException | NullPointerException ex) {
             view.message(ex instanceof IllegalArgumentException ? ex.getMessage() : "Choose a district and issue.", true);
+        }
+    }
+
+    private void queueSave(CitizenReport report) {
+        if (!saving.compareAndSet(false, true)) return;
+        view.reportSaving(true);
+        try {
+            background.execute(() -> persist(report));
+        } catch (RejectedExecutionException ex) {
+            finishSave();
+            view.message("Save unavailable while the application is closing.", true);
         }
     }
 
@@ -103,7 +146,14 @@ public final class MonitorController {
             showReports(true);
         } catch (IOException ex) {
             reportFailure(ex, "The report could not be saved. Check local storage permissions.");
+        } finally {
+            ui.execute(this::finishSave);
         }
+    }
+
+    private void finishSave() {
+        saving.set(false);
+        view.reportSaving(false);
     }
 
     private void showReports(boolean saved) {
@@ -114,7 +164,7 @@ public final class MonitorController {
                 if (saved) view.message("Report saved on this device.", false);
             });
         } catch (IOException ex) {
-            reportFailure(ex, "Local report history could not be read.");
+            reportFailure(ex, saved ? "Report saved, but history could not be reloaded." : "Local report history could not be read.");
         }
     }
 

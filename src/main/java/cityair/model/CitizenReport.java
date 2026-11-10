@@ -10,6 +10,8 @@ public record CitizenReport(UUID id, District district, Issue issue, String desc
     public static final int MIN_DESCRIPTION = 10;
     /** Longest accepted description after trimming. */
     public static final int MAX_DESCRIPTION = 500;
+    /** Shared display range, built from the actual validation bounds. */
+    public static final String DESCRIPTION_RANGE = MIN_DESCRIPTION + " to " + MAX_DESCRIPTION;
 
     /** Report categories shown in the form. */
     public enum Issue { SMOKE, DUST, ODOUR, OTHER }
@@ -23,7 +25,7 @@ public record CitizenReport(UUID id, District district, Issue issue, String desc
         if (description == null) throw new IllegalArgumentException("Enter a description.");
         description = description.strip();
         if (description.length() < MIN_DESCRIPTION || description.length() > MAX_DESCRIPTION) {
-            throw new IllegalArgumentException("Description must contain 10 to 500 characters.");
+            throw new IllegalArgumentException("Description must contain " + DESCRIPTION_RANGE + " characters.");
         }
     }
 }
