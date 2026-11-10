@@ -44,6 +44,7 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
     private final JTextArea reportHistory = area("reportHistory"), notifications = area("notifications");
     private final JTextArea description = area("description");
     private final JLabel status = named(new JLabel("Ready. Choose a district to start."), "status");
+    private final JLabel latestAlert = named(new JLabel("No notifications delivered in this session."), "latestAlert");
     private final JCheckBox subscription = named(new JCheckBox("Enable notifications for selected district"), "subscription");
     private final Map<District, ReadingService.Result> results = new EnumMap<>(District.class);
     private final Map<District, List<Reading>> trends = new EnumMap<>(District.class);
@@ -58,7 +59,10 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
         setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
         add(toolbar(), BorderLayout.NORTH);
         add(tabs, BorderLayout.CENTER);
-        add(status, BorderLayout.SOUTH);
+        var feedback = new JPanel(new GridLayout(2, 1));
+        feedback.add(status);
+        feedback.add(latestAlert);
+        add(feedback, BorderLayout.SOUTH);
         addTabs();
         description.setEditable(true);
         selectSaved();
@@ -281,7 +285,10 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
         for (var alert : history) text.append(time(alert.validAt())).append(" · ").append(alert.district())
                 .append(" · AQI ").append(alert.aqi()).append(" crossed ").append(alert.threshold()).append('\n');
         setText(notifications, text.isEmpty() ? "No alerts in this session." : text.toString());
-        if (delivered != null) message("Pollution alert for " + delivered.district() + ": U.S. AQI " + delivered.aqi(), true);
+        if (delivered != null) {
+            latestAlert.setForeground(ERROR);
+            latestAlert.setText("Pollution alert for " + delivered.district() + ": U.S. AQI " + delivered.aqi());
+        }
     }
 
     private static String source(ReadingService.Result result) {
