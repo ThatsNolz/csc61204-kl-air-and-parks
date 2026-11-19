@@ -176,8 +176,9 @@ public final class DesktopEvidence {
     private void assertDistrictTable() throws Exception {
         onEdt(() -> {
             var table = (JTable) find(panel, "districtTable");
+            if (table.getRowCount() != cityair.model.District.values().length) throw new AssertionError("Incomplete district table");
             for (int i = 0; i < table.getRowCount(); i++) {
-                if ("Not loaded".equals(table.getValueAt(i, 3))) throw new AssertionError("Missing comparison attempt");
+                if (!(table.getValueAt(i, 1) instanceof Integer)) throw new AssertionError("Missing verified AQI for " + table.getValueAt(i, 0));
             }
         });
     }
