@@ -42,7 +42,7 @@ import javax.swing.SwingConstants;
  * with the reading.</p>
  */
 final class OverviewPane extends JPanel implements Themed {
-    private static final int HERO_WIDTH = 490, HERO_HEIGHT = 330, DIAL_WIDTH = 250;
+    private static final int HERO_WIDTH = 540, HERO_HEIGHT = 330, DIAL_WIDTH = 250;
     private final AqiDial dial = new AqiDial(CategoryPalette::forIndex);
     private final BandScale scale = new BandScale(CategoryPalette::forIndex);
     private final AuroraLabel area = Text.caption("");

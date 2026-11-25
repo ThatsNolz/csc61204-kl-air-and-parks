@@ -94,7 +94,7 @@ final class TopBar extends JPanel implements Themed {
 
     private JComponent brand() {
         var title = new AuroraLabel("KL Air & Parks", Type.strong(Type.HEADING), Tone.INK);
-        var tagline = new AuroraLabel("Environmental intelligence · SDG 11 pilot", Type.text(Type.MICRO),
+        var tagline = new AuroraLabel("SDG 11 pilot", Type.text(Type.MICRO),
                 Tone.INK_MUTED);
         var text = Panels.stack(2, title, tagline);
         title.setAlignmentX(LEFT_ALIGNMENT);

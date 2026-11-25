@@ -57,7 +57,7 @@ public final class Formats {
     public static String source(Result result, boolean fixture) {
         if (result == null) return "NOT LOADED";
         return switch (result.state()) {
-            case CACHED -> "CACHED (last verified response)";
+            case CACHED -> "CACHED · last verified";
             case LIVE -> fixture ? "TEST FIXTURE" : "LIVE API (modeled estimate)";
             case UNAVAILABLE -> "UNAVAILABLE";
         };
