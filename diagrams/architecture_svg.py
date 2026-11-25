@@ -71,14 +71,14 @@ def build():
     box(180, 430, 430, 70, "ReadingService", ["chooses LIVE, CACHED or UNAVAILABLE; publishes live", "readings to AlertMonitor; caches validated ones"], width=2)
     box(640, 430, 250, 70, "AlertMonitor  «Subject»", ["fresh upward crossing of", "a configurable threshold"])
     box(920, 430, 230, 70, "AdviceProfile → AdviceStrategy", ["«Strategy»: General public,", "Children, Older adults"])
-    box(180, 512, 970, 34, "Result record: state + validated Reading (or none) + user-safe message", bold=False)
+    box(180, 512, 970, 34, "Result record (state, Reading, message)  ·  pure rule services: ActivityPlanner · InsightEngine · TrendSummary", bold=False)
     box(180, 610, 430, 90, "AirQualityGateway  «interface»", ["OpenMeteoClient: java.net.http.HttpClient,",
                                                                "10 s timeout, Jackson tree validation,",
                                                                "ApiFailure.Kind for 404 / 429 / 5xx / timeout"], width=2)
     box(640, 610, 250, 90, "ReadingCache", ["one validated reading per area", "atomic JSON replace"], fill="#FFF4E0")
     box(920, 610, 230, 90, "ReportStore", ["reports.json, newest first", "never drops older entries"], fill="#FFF4E0")
     # Domain and external
-    box(180, 760, 560, 70, "Domain model (immutable records and enums)", ["Reading · CitizenReport · District · AirCategory · CityCatalog",
+    box(180, 760, 560, 70, "Domain model (immutable records and enums)", ["Reading · CitizenReport · District · AirCategory · CityCatalog · GuidelineLevel · activity enums",
                                                                          "validation in constructors; no Swing or I/O"], fill="#EEF1FB")
     box(800, 760, 350, 70, "Open-Meteo Air Quality API", ["Copernicus CAMS Global model",
                                                           "GET /v1/air-quality · HTTPS · JSON"], fill="#FFFFFF", stroke=TEAL, width=2)
