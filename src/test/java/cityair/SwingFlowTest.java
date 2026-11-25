@@ -94,16 +94,49 @@ class SwingFlowTest {
             assertTrue(((JLabel) find(p, "status")).getText().contains("10 to 500"));
             area(p, "description").setText("Observed smoke near the entrance.");
             button(p, "save").doClick(0);
-            assertTrue(area(p, "reportHistory").getText().contains("Observed smoke"));
+            assertEquals("Observed smoke near the entrance.", table(p, "reportTable").getValueAt(0, 3));
             assertEquals("", area(p, "description").getText());
         });
     }
     @Test void subscribe_refreshAboveThreshold_displaysAlertBannerAndHistory() throws Exception {
         usePanel(p -> {
-            ((JCheckBox) find(p, "subscription")).doClick(0);
+            ((JCheckBox) find(p, "subscription.TITIWANGSA")).doClick(0);
             button(p, "refresh").doClick(0);
-            assertTrue(area(p, "notifications").getText().contains("crossed 101"));
-            assertTrue(((JLabel) find(p, "latestAlert")).getText().contains("Pollution alert"));
+            assertAll(() -> assertEquals(110, table(p, "alertTable").getValueAt(0, 2)),
+                    () -> assertEquals(101, table(p, "alertTable").getValueAt(0, 3)),
+                    () -> assertTrue(((JLabel) find(p, "latestAlert")).getText().contains("Pollution alert")));
+        });
+    }
+
+    @Test void reportFilter_selectedDistrict_showsOnlyMatchingReports() throws Exception {
+        usePanel(p -> {
+            area(p, "description").setText("Dust from roadworks near the lake.");
+            button(p, "save").doClick(0);
+            combo(p, "reportDistrict").setSelectedItem(District.PERDANA);
+            area(p, "description").setText("Smoke drifting over the garden.");
+            button(p, "save").doClick(0);
+            combo(p, "reportFilter").setSelectedItem(District.PERDANA);
+            var reports = table(p, "reportTable");
+            assertAll(() -> assertEquals(1, reports.getRowCount()),
+                    () -> assertEquals("Smoke drifting over the garden.", reports.getValueAt(0, 3)));
+        });
+    }
+
+    @Test void threshold_loweredBeforeRefresh_deliversAlertForModerateReading() throws Exception {
+        usePanel(p -> {
+            ((JCheckBox) find(p, "subscription.TITIWANGSA")).doClick(0);
+            ((JSpinner) find(p, "threshold")).setValue(100);
+            button(p, "refresh").doClick(0);
+            assertEquals(100, table(p, "alertTable").getValueAt(0, 3));
+        });
+    }
+
+    @Test void advice_comparisonRow_appliesEveryStrategyToTheSameReading() throws Exception {
+        usePanel(p -> {
+            button(p, "refresh").doClick(0);
+            var summary = ((JLabel) find(p, "adviceSummary")).getText();
+            assertAll(() -> assertTrue(summary.contains("Reduce prolonged") || summary.contains("Routine")),
+                    () -> assertEquals("Unhealthy for sensitive groups", ((JLabel) find(p, "aqiCategory")).getText()));
         });
     }
 
