@@ -58,10 +58,12 @@ def build():
     band(270, 110, "Controller", "EDT → worker")
     band(410, 150, "Service", "worker thread")
     band(590, 130, "API and data", "worker thread")
-    box(180, 108, 300, 58, "MonitorPanel", ["shell · implements View · binds actions"], width=2)
-    box(500, 108, 380, 58, "Six screen panes", ["Overview · Monitoring · Advice · Reports · Alerts · About"])
+    box(180, 108, 300, 58, "MonitorPanel", ["shell · implements View · binds actions",
+                                              "owns the TopBar and StatusBar"], width=2)
+    box(500, 108, 380, 58, "Seven screen panes", ["Overview · Monitoring · Planner · Reports",
+                                                    "Alerts · Data & impact · Settings"])
     box(900, 108, 250, 58, "ViewPreferences", ["district, audience, alerts, threshold"])
-    box(180, 176, 970, 46, "Theme · CategoryPalette (EPA colours) · AqiScale · TrendChart · DistrictStrip · NavigationRailUI", bold=False)
+    box(180, 176, 970, 46, "view.design tokens · view.component controls · view.chart plots · CategoryPalette (EPA colours) · NavigationRailUI", bold=False)
     box(180, 290, 430, 70, "MonitorController", ["schedules I/O on one worker; AtomicBoolean guards",
                                                   "stop overlapping refreshes and duplicate saves"], width=2)
     box(640, 290, 250, 70, "AlertBridge  «ConcreteObserver»", ["forwards alerts to the EDT"])

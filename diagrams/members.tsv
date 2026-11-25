@@ -40,6 +40,8 @@ METHOD	Main	-Main()
 METHOD	Main	{static} +main(args: String[]): void
 METHOD	Main	{static} -client(): OpenMeteoClient
 METHOD	Main	{static} -open(): void
+METHOD	Main	{static} -frame(panel: MonitorPanel, worker: java.util.concurrent.ExecutorService): JFrame
+METHOD	Main	{static} -show(window: JFrame, panel: MonitorPanel): void
 TYPE	AlertBridge	CLASS	implements PollutionObserver
 FIELD	AlertBridge	-monitor: AlertMonitor
 FIELD	AlertBridge	-ui: Executor
@@ -82,6 +84,26 @@ METHOD	MonitorController	-showReports(saved: boolean): void
 METHOD	MonitorController	-reportFailure(ex: IOException, message: String): void
 METHOD	MonitorController	+changeThreshold(value: int): void
 METHOD	MonitorController	+subscribe(district: District, enabled: boolean): void
+TYPE	ActivityIntensity	ENUM	
+FIELD	ActivityIntensity	{static} +LIGHT: ActivityIntensity
+FIELD	ActivityIntensity	{static} +MODERATE: ActivityIntensity
+FIELD	ActivityIntensity	{static} +VIGOROUS: ActivityIntensity
+FIELD	ActivityIntensity	-label: String
+FIELD	ActivityIntensity	-weight: int
+METHOD	ActivityIntensity	~ActivityIntensity(label: String, weight: int)
+METHOD	ActivityIntensity	+weight(): int
+METHOD	ActivityIntensity	+toString(): String
+TYPE	ActivityWindow	ENUM	
+FIELD	ActivityWindow	{static} +SHORT: ActivityWindow
+FIELD	ActivityWindow	{static} +MEDIUM: ActivityWindow
+FIELD	ActivityWindow	{static} +LONG: ActivityWindow
+FIELD	ActivityWindow	-label: String
+FIELD	ActivityWindow	-duration: Duration
+FIELD	ActivityWindow	-weight: int
+METHOD	ActivityWindow	~ActivityWindow(label: String, duration: Duration, weight: int)
+METHOD	ActivityWindow	+duration(): Duration
+METHOD	ActivityWindow	+weight(): int
+METHOD	ActivityWindow	+toString(): String
 TYPE	AirCategory	ENUM	
 FIELD	AirCategory	{static} +GOOD: AirCategory
 FIELD	AirCategory	{static} +MODERATE: AirCategory
@@ -132,6 +154,24 @@ METHOD	District	~District(label: String, latitude: double, longitude: double)
 METHOD	District	+latitude(): double
 METHOD	District	+longitude(): double
 METHOD	District	+toString(): String
+TYPE	GuidelineLevel	ENUM	
+FIELD	GuidelineLevel	{static} +PM25: GuidelineLevel
+FIELD	GuidelineLevel	{static} +PM10: GuidelineLevel
+FIELD	GuidelineLevel	{static} +NITROGEN_DIOXIDE: GuidelineLevel
+FIELD	GuidelineLevel	{static} +OZONE: GuidelineLevel
+FIELD	GuidelineLevel	{static} +CAVEAT: String
+FIELD	GuidelineLevel	{static} +SOURCE: URI
+FIELD	GuidelineLevel	{static} -PERCENT: double
+FIELD	GuidelineLevel	-label: String
+FIELD	GuidelineLevel	-level: double
+FIELD	GuidelineLevel	-period: String
+FIELD	GuidelineLevel	-measurement: Function<Reading, Double>
+METHOD	GuidelineLevel	~GuidelineLevel(label: String, level: double, period: String, measurement: Function<Reading, Double>)
+METHOD	GuidelineLevel	+level(): double
+METHOD	GuidelineLevel	+period(): String
+METHOD	GuidelineLevel	+toString(): String
+METHOD	GuidelineLevel	+measure(reading: Reading): Double
+METHOD	GuidelineLevel	+percentOfLevel(reading: Reading): Double
 TYPE	Reading	RECORD	
 FIELD	Reading	-district: District
 FIELD	Reading	-validAt: Instant
@@ -186,6 +226,59 @@ FIELD	ReportStore	-file: Path
 METHOD	ReportStore	+ReportStore(folder: Path)
 METHOD	ReportStore	+list(): List<CitizenReport>
 METHOD	ReportStore	+save(report: CitizenReport): void
+TYPE	ActivityPlanner	CLASS	
+FIELD	ActivityPlanner	{static} +BASIS: String
+FIELD	ActivityPlanner	{static} -SUITABLE_LIMIT: int
+FIELD	ActivityPlanner	{static} -ACCEPTABLE_LIMIT: int
+FIELD	ActivityPlanner	{static} -MODIFY_LIMIT: int
+FIELD	ActivityPlanner	{static} -SENSITIVE_AUDIENCE_WEIGHT: int
+TYPE	ActivityPlanner.Verdict	ENUM	
+FIELD	ActivityPlanner.Verdict	{static} +SUITABLE: Verdict
+FIELD	ActivityPlanner.Verdict	{static} +ACCEPTABLE: Verdict
+FIELD	ActivityPlanner.Verdict	{static} +MODIFY: Verdict
+FIELD	ActivityPlanner.Verdict	{static} +RESCHEDULE: Verdict
+FIELD	ActivityPlanner.Verdict	-label: String
+METHOD	ActivityPlanner.Verdict	~Verdict(label: String)
+METHOD	ActivityPlanner.Verdict	+toString(): String
+TYPE	ActivityPlanner.Plan	RECORD	
+FIELD	ActivityPlanner.Plan	-verdict: Verdict
+FIELD	ActivityPlanner.Plan	-score: int
+FIELD	ActivityPlanner.Plan	-reason: String
+FIELD	ActivityPlanner.Plan	-guidance: String
+FIELD	ActivityPlanner.Plan	-precautions: List<String>
+METHOD	ActivityPlanner.Plan	+Plan(verdict: Verdict, score: int, reason: String, guidance: String, precautions: List<String>)
+METHOD	ActivityPlanner	-ActivityPlanner()
+METHOD	ActivityPlanner	{static} +plan(category: AirCategory, intensity: ActivityIntensity, window: ActivityWindow, audience: AdviceProfile): Plan
+METHOD	ActivityPlanner	{static} +score(category: AirCategory, intensity: ActivityIntensity, window: ActivityWindow, audience: AdviceProfile): int
+METHOD	ActivityPlanner	{static} -audienceWeight(audience: AdviceProfile): int
+METHOD	ActivityPlanner	{static} -verdict(category: AirCategory, score: int): Verdict
+METHOD	ActivityPlanner	{static} -reason(category: AirCategory, intensity: ActivityIntensity, window: ActivityWindow, audience: AdviceProfile, score: int): String
+METHOD	ActivityPlanner	{static} -precautions(category: AirCategory, intensity: ActivityIntensity, window: ActivityWindow, verdict: Verdict): List<String>
+TYPE	InsightEngine	CLASS	
+TYPE	InsightEngine.Level	ENUM	
+FIELD	InsightEngine.Level	{static} +NEUTRAL: Level
+FIELD	InsightEngine.Level	{static} +POSITIVE: Level
+FIELD	InsightEngine.Level	{static} +CAUTION: Level
+FIELD	InsightEngine.Level	{static} +CRITICAL: Level
+TYPE	InsightEngine.Insight	RECORD	
+FIELD	InsightEngine.Insight	-level: Level
+FIELD	InsightEngine.Insight	-title: String
+FIELD	InsightEngine.Insight	-detail: String
+METHOD	InsightEngine.Insight	+Insight(level: Level, title: String, detail: String)
+FIELD	InsightEngine	{static} -MAXIMUM_INSIGHTS: int
+FIELD	InsightEngine	{static} -GUIDELINE_ATTENTION: double
+METHOD	InsightEngine	-InsightEngine()
+METHOD	InsightEngine	{static} +insights(selected: District, latest: Map<District, Reading>, history: List<Reading>, threshold: int, now: Instant): List<Insight>
+METHOD	InsightEngine	{static} -noData(): Insight
+METHOD	InsightEngine	{static} -threshold(reading: Reading, threshold: int): Insight
+METHOD	InsightEngine	{static} -trend(summary: TrendSummary): Insight
+METHOD	InsightEngine	{static} -describeSpan(span: Duration): String
+METHOD	InsightEngine	{static} -dominantPollutant(reading: Reading): Insight
+METHOD	InsightEngine	{static} -pollutantInsight(pollutant: GuidelineLevel, percent: double): Insight
+METHOD	InsightEngine	{static} -comparison(selected: District, latest: Map<District, Reading>): Insight
+METHOD	InsightEngine	{static} -cleanestOther(selected: District, latest: Map<District, Reading>): District
+METHOD	InsightEngine	{static} -freshness(reading: Reading, now: Instant): Insight
+METHOD	InsightEngine	{static} -addIfPresent(found: List<Insight>, insight: Insight): void
 TYPE	ReadingService	CLASS	
 TYPE	ReadingService.State	ENUM	
 FIELD	ReadingService.State	{static} +LIVE: State
@@ -209,6 +302,26 @@ METHOD	ReadingService	+history(district: District): List<Reading>
 METHOD	ReadingService	-remember(reading: Reading): void
 METHOD	ReadingService	-fallback(district: District, message: String): Result
 METHOD	ReadingService	-cached(district: District): Reading
+TYPE	TrendSummary	RECORD	
+FIELD	TrendSummary	-samples: int
+FIELD	TrendSummary	-lowest: int
+FIELD	TrendSummary	-highest: int
+FIELD	TrendSummary	-average: double
+FIELD	TrendSummary	-change: int
+FIELD	TrendSummary	-span: Duration
+FIELD	TrendSummary	-latest: Reading
+FIELD	TrendSummary	{static} +EMPTY: TrendSummary
+FIELD	TrendSummary	{static} -ROUNDING: double
+TYPE	TrendSummary.Direction	ENUM	
+FIELD	TrendSummary.Direction	{static} +RISING: Direction
+FIELD	TrendSummary.Direction	{static} +FALLING: Direction
+FIELD	TrendSummary.Direction	{static} +STEADY: Direction
+FIELD	TrendSummary.Direction	{static} +UNKNOWN: Direction
+METHOD	TrendSummary	{static} +of(readings: List<Reading>): TrendSummary
+METHOD	TrendSummary	+direction(): Direction
+METHOD	TrendSummary	+hasData(): boolean
+METHOD	TrendSummary	+newestHour(): Instant
+METHOD	TrendSummary	{static} +indices(readings: List<Reading>): List<Integer>
 TYPE	AdviceProfile	ENUM	
 FIELD	AdviceProfile	{static} +GENERAL: AdviceProfile
 FIELD	AdviceProfile	{static} +CHILDREN: AdviceProfile
@@ -226,308 +339,1251 @@ TYPE	GeneralPublicAdvice	CLASS	implements AdviceStrategy
 METHOD	GeneralPublicAdvice	+advice(category: AirCategory): String
 TYPE	OlderAdultsAdvice	CLASS	implements AdviceStrategy
 METHOD	OlderAdultsAdvice	+advice(category: AirCategory): String
-TYPE	AboutPane	CLASS	extends JPanel
-FIELD	AboutPane	{static} -TEXT_WIDTH: int
+TYPE	AboutPane	CLASS	extends JPanel, implements Themed
+FIELD	AboutPane	{static} -LEGEND_WIDTH: int
+FIELD	AboutPane	{static} -CHIP_WIDTH: int
+FIELD	AboutPane	{static} -CHIP_HEIGHT: int
 METHOD	AboutPane	~AboutPane()
-METHOD	AboutPane	{static} -legend(): JPanel
-METHOD	AboutPane	{static} -legendRow(category: AirCategory, lower: int): JPanel
-METHOD	AboutPane	{static} -note(title: String, body: String): JPanel
-TYPE	AdvicePane	CLASS	extends JPanel
-FIELD	AdvicePane	{static} -TEXT_WIDTH: int
-FIELD	AdvicePane	-advice: JTextArea
-FIELD	AdvicePane	-cards: Map<AdviceProfile, JPanel>
-FIELD	AdvicePane	-texts: Map<AdviceProfile, JLabel>
-METHOD	AdvicePane	~AdvicePane(profile: JComboBox<AdviceProfile>, advice: JTextArea)
-METHOD	AdvicePane	{static} -selector(profile: JComboBox<AdviceProfile>): JPanel
-METHOD	AdvicePane	-comparison(): JPanel
-METHOD	AdvicePane	~render(district: District, result: Result, source: String, selected: AdviceProfile): void
-METHOD	AdvicePane	{static} -detail(district: District, reading: Reading, source: String, selected: AdviceProfile): String
-TYPE	AlertsPane	CLASS	extends JPanel
+METHOD	AboutPane	-legend(): JComponent
+METHOD	AboutPane	-legendRow(category: AirCategory, lower: int): JComponent
+METHOD	AboutPane	{static} -chip(range: String, category: AirCategory): JComponent
+TYPE	AboutPane.CategoryChip	CLASS	extends AuroraComponent
+FIELD	AboutPane.CategoryChip	-range: String
+FIELD	AboutPane.CategoryChip	-category: AirCategory
+METHOD	AboutPane.CategoryChip	~CategoryChip(range: String, category: AirCategory)
+METHOD	AboutPane.CategoryChip	+getPreferredSize(): Dimension
+METHOD	AboutPane.CategoryChip	#paintComponent(graphics: Graphics): void
+METHOD	AboutPane	-notes(): JComponent
+METHOD	AboutPane	{static} -note(title: String, body: String): JComponent
+METHOD	AboutPane	+applyTheme(): void
+TYPE	AlertsPane	CLASS	extends JPanel, implements Themed
 FIELD	AlertsPane	{static} -SETTINGS_WIDTH: int
 FIELD	AlertsPane	{static} -WIDTHS: int[]
-FIELD	AlertsPane	-switches: Map<District, JCheckBox>
-FIELD	AlertsPane	-threshold: JSpinner
+FIELD	AlertsPane	-switches: Map<District, ToggleSwitch>
+FIELD	AlertsPane	-threshold: Stepper
 FIELD	AlertsPane	-model: DefaultTableModel
-FIELD	AlertsPane	-table: JTable
+FIELD	AlertsPane	-table: DataTable
+FIELD	AlertsPane	-state: Badge
+FIELD	AlertsPane	-thresholdCategory: AuroraLabel
+FIELD	AlertsPane	-historyLayout: CardLayout
+FIELD	AlertsPane	-historyBody: JPanel
 METHOD	AlertsPane	~AlertsPane()
-METHOD	AlertsPane	-settings(): JPanel
-METHOD	AlertsPane	-thresholdCard(): JPanel
+METHOD	AlertsPane	-settings(): JComponent
+METHOD	AlertsPane	-subscriptions(): JComponent
+METHOD	AlertsPane	-thresholdCard(): JComponent
+METHOD	AlertsPane	-rule(): JComponent
+METHOD	AlertsPane	-history(): JComponent
 METHOD	AlertsPane	~onSubscription(action: BiConsumer<District, Boolean>): void
 METHOD	AlertsPane	~onThreshold(action: IntConsumer): void
-METHOD	AlertsPane	~setSubscribed(item: District, enabled: boolean): void
+METHOD	AlertsPane	~setSubscribed(area: District, enabled: boolean): void
 METHOD	AlertsPane	~setThreshold(value: int): void
 METHOD	AlertsPane	~render(history: List<AlertMonitor.Alert>): void
-TYPE	AqiScale	CLASS	extends JPanel
-FIELD	AqiScale	{static} ~SCALE_MAXIMUM: int
-FIELD	AqiScale	{static} -BAR: int
-FIELD	AqiScale	{static} -MARKER: int
-FIELD	AqiScale	{static} -HEIGHT: int
-FIELD	AqiScale	{static} -CATEGORIES: AirCategory[]
-FIELD	AqiScale	-index: Integer
-METHOD	AqiScale	~AqiScale()
-METHOD	AqiScale	~setIndex(value: Integer): void
-METHOD	AqiScale	{static} ~position(aqi: int): double
-METHOD	AqiScale	#paintComponent(graphics: Graphics): void
-METHOD	AqiScale	-paintSegments(g: Graphics2D, top: int): void
-METHOD	AqiScale	-paintTicks(g: Graphics2D, baseline: int): void
-METHOD	AqiScale	-paintMarker(g: Graphics2D, x: int, top: int): void
+METHOD	AlertsPane	+applyTheme(): void
+TYPE	BrandMark	CLASS	extends AuroraComponent
+FIELD	BrandMark	{static} -SIZE: int
+METHOD	BrandMark	~BrandMark()
+METHOD	BrandMark	#paintComponent(graphics: Graphics): void
+METHOD	BrandMark	{static} -arcColour(ring: int): java.awt.Color
 TYPE	CategoryPalette	CLASS	
-FIELD	CategoryPalette	{static} -FILL: Map<AirCategory, Color>
-FIELD	CategoryPalette	{static} -DARK_TEXT: Color
+FIELD	CategoryPalette	{static} -AIRNOW: Map<AirCategory, Color>
+FIELD	CategoryPalette	{static} -NIGHT: Map<AirCategory, Color>
+FIELD	CategoryPalette	{static} -LIGHT_INK: Map<AirCategory, Color>
 METHOD	CategoryPalette	-CategoryPalette()
-METHOD	CategoryPalette	{static} ~fill(category: AirCategory): Color
-METHOD	CategoryPalette	{static} ~onFill(category: AirCategory): Color
-TYPE	DistrictStrip	CLASS	extends JPanel
-FIELD	DistrictStrip	-cards: Map<District, JPanel>
-FIELD	DistrictStrip	-values: Map<District, JLabel>
-FIELD	DistrictStrip	-categories: Map<District, JLabel>
+METHOD	CategoryPalette	{static} +fill(category: AirCategory): Color
+METHOD	CategoryPalette	{static} +ink(category: AirCategory): Color
+METHOD	CategoryPalette	{static} +onFill(category: AirCategory): Color
+METHOD	CategoryPalette	{static} +forIndex(aqi: int): Color
+METHOD	CategoryPalette	{static} +inkForIndex(aqi: int): Color
+METHOD	CategoryPalette	{static} +unknown(): Color
+TYPE	AqiDial	CLASS	extends AuroraComponent
+FIELD	AqiDial	{static} +SCALE_MAXIMUM: int
+FIELD	AqiDial	{static} -START_ANGLE: double
+FIELD	AqiDial	{static} -SWEEP_ANGLE: double
+FIELD	AqiDial	{static} -TRACK_WEIGHT: int
+FIELD	AqiDial	{static} -GAP_DEGREES: int
+FIELD	AqiDial	{static} -MINIMUM_SIZE: int
+FIELD	AqiDial	{static} -LABEL_ROOM: int
+FIELD	AqiDial	{static} -INNER_RATIO: double
+FIELD	AqiDial	-categoryColour: IntFunction<Color>
+FIELD	AqiDial	-index: Integer
+FIELD	AqiDial	-threshold: Integer
+FIELD	AqiDial	-shown: double
+FIELD	AqiDial	-motion: Motion
+METHOD	AqiDial	+AqiDial(categoryColour: IntFunction<Color>)
+METHOD	AqiDial	+setIndex(value: Integer): void
+METHOD	AqiDial	+setThreshold(value: Integer): void
+METHOD	AqiDial	+index(): Integer
+METHOD	AqiDial	+setReadout(readout: JComponent): void
+METHOD	AqiDial	+doLayout(): void
+METHOD	AqiDial	+getPreferredSize(): Dimension
+METHOD	AqiDial	+getMinimumSize(): Dimension
+METHOD	AqiDial	#role(): javax.accessibility.AccessibleRole
+METHOD	AqiDial	#paintComponent(graphics: Graphics): void
+METHOD	AqiDial	-paintTrack(g: Graphics2D, x: double, y: double, size: double): void
+METHOD	AqiDial	-paintSweep(g: Graphics2D, x: double, y: double, size: double): void
+METHOD	AqiDial	-paintHead(g: Graphics2D, x: double, y: double, size: double, extent: double, colour: Color): void
+METHOD	AqiDial	-paintThreshold(g: Graphics2D, x: double, y: double, size: double): void
+METHOD	AqiDial	-paintThresholdLabel(g: Graphics2D, x: double, y: double): void
+METHOD	AqiDial	{static} +fraction(aqi: double): double
+METHOD	AqiDial	-describe(): void
+TYPE	AreaPlot	CLASS	extends AuroraComponent
+FIELD	AreaPlot	{static} +KM_PER_DEGREE_LATITUDE: double
+FIELD	AreaPlot	{static} +KM_PER_DEGREE_LONGITUDE: double
+FIELD	AreaPlot	{static} -MARGIN: int
+FIELD	AreaPlot	{static} -MARKER: int
+FIELD	AreaPlot	{static} -SCALE_BAR_KM: int
+FIELD	AreaPlot	{static} -MINIMUM_HEIGHT: int
+FIELD	AreaPlot	{static} -LABEL_LINE: int
+FIELD	AreaPlot	{static} -LABEL_HEIGHT: int
+FIELD	AreaPlot	-categoryColour: IntFunction<Color>
+FIELD	AreaPlot	-values: Map<District, Integer>
+FIELD	AreaPlot	-placed: Map<District, Point>
+FIELD	AreaPlot	-selected: District
+FIELD	AreaPlot	-hovered: District
+FIELD	AreaPlot	-labelRows: java.util.List<Integer>
+FIELD	AreaPlot	-chooser: Consumer<District>
+METHOD	AreaPlot	+AreaPlot(categoryColour: IntFunction<Color>)
+METHOD	AreaPlot	+onChoose(action: Consumer<District>): void
+METHOD	AreaPlot	+setValues(indices: Map<District, Integer>, current: District): void
+METHOD	AreaPlot	{static} +distanceKm(from: District, to: District): double
+METHOD	AreaPlot	#role(): javax.accessibility.AccessibleRole
+METHOD	AreaPlot	#paintComponent(graphics: Graphics): void
+METHOD	AreaPlot	-place(): void
+METHOD	AreaPlot	-scaleFor(spanEast: double, spanNorth: double): double
+METHOD	AreaPlot	{static} -centre(extent: int): double
+METHOD	AreaPlot	{static} -east(area: District): double
+METHOD	AreaPlot	-paintGrid(g: Graphics2D): void
+METHOD	AreaPlot	-paintLinks(g: Graphics2D): void
+METHOD	AreaPlot	-paintMarker(g: Graphics2D, area: District): void
+METHOD	AreaPlot	-paintMarkerLabel(g: Graphics2D, area: District, at: Point, value: Integer): void
+METHOD	AreaPlot	-clearRow(preferred: int): int
+METHOD	AreaPlot	-paintScaleBar(g: Graphics2D): void
+METHOD	AreaPlot	-pixelsPerKilometre(): double
+METHOD	AreaPlot	-pointer(): MouseAdapter
+METHOD	AreaPlot	-at(x: int, y: int): District
+METHOD	AreaPlot	-setHovered(area: District): void
+METHOD	AreaPlot	-describe(): void
+TYPE	BandScale	CLASS	extends AuroraComponent
+FIELD	BandScale	{static} +SCALE_MAXIMUM: int
+FIELD	BandScale	{static} -CATEGORIES: AirCategory[]
+FIELD	BandScale	{static} -BAR: int
+FIELD	BandScale	{static} -MARKER: int
+FIELD	BandScale	{static} -HEIGHT: int
+FIELD	BandScale	{static} -LABEL_GAP: int
+FIELD	BandScale	-categoryColour: IntFunction<Color>
+FIELD	BandScale	-index: Integer
+METHOD	BandScale	+BandScale(categoryColour: IntFunction<Color>)
+METHOD	BandScale	+setIndex(value: Integer): void
+METHOD	BandScale	{static} +position(aqi: int): double
+METHOD	BandScale	#paintComponent(graphics: Graphics): void
+METHOD	BandScale	-paintBands(g: Graphics2D, top: int): void
+METHOD	BandScale	-paintTicks(g: Graphics2D, baseline: int): void
+METHOD	BandScale	-paintMarker(g: Graphics2D, x: double, top: int): void
+TYPE	ComparisonBars	CLASS	extends AuroraComponent
+FIELD	ComparisonBars	{static} -ROW_HEIGHT: int
+FIELD	ComparisonBars	{static} -BAR_HEIGHT: int
+FIELD	ComparisonBars	{static} -LABEL_WIDTH: int
+FIELD	ComparisonBars	{static} -VALUE_WIDTH: int
+FIELD	ComparisonBars	-categoryColour: IntFunction<Color>
+FIELD	ComparisonBars	-values: Map<District, Integer>
+FIELD	ComparisonBars	-grown: Map<District, Double>
+FIELD	ComparisonBars	-selected: District
+FIELD	ComparisonBars	-ceiling: int
+METHOD	ComparisonBars	+ComparisonBars(categoryColour: IntFunction<Color>)
+METHOD	ComparisonBars	+setValues(indices: Map<District, Integer>, current: District): void
+METHOD	ComparisonBars	+getPreferredSize(): Dimension
+METHOD	ComparisonBars	#role(): javax.accessibility.AccessibleRole
+METHOD	ComparisonBars	#paintComponent(graphics: Graphics): void
+METHOD	ComparisonBars	-paintRow(g: Graphics2D, area: District, top: int): void
+METHOD	ComparisonBars	-paintTrack(g: Graphics2D, area: District, top: int): void
+METHOD	ComparisonBars	-paintValue(g: Graphics2D, area: District, top: int): void
+METHOD	ComparisonBars	-grow(): void
+METHOD	ComparisonBars	-describe(): void
+TYPE	TrendChart	CLASS	extends AuroraComponent
+FIELD	TrendChart	{static} -LEFT: int
+FIELD	TrendChart	{static} -RIGHT: int
+FIELD	TrendChart	{static} -TOP: int
+FIELD	TrendChart	{static} -BOTTOM: int
+FIELD	TrendChart	{static} -POINT: int
+FIELD	TrendChart	{static} -HOVER_POINT: int
+FIELD	TrendChart	{static} -MINIMUM_HEIGHT: int
+FIELD	TrendChart	{static} -MINIMUM_SCALE: double
+FIELD	TrendChart	{static} -DASH: float[]
+FIELD	TrendChart	-categoryColour: IntFunction<Color>
+FIELD	TrendChart	-describe: BiFunction<Reading, Boolean, String>
+FIELD	TrendChart	-samples: List<Reading>
+FIELD	TrendChart	-district: District
+FIELD	TrendChart	-threshold: int
+FIELD	TrendChart	-highlighted: int
+METHOD	TrendChart	+TrendChart(categoryColour: IntFunction<Color>, describe: BiFunction<Reading, Boolean, String>)
+METHOD	TrendChart	+setHistory(area: District, history: List<Reading>, alertThreshold: int): void
+METHOD	TrendChart	+highlighted(): int
+METHOD	TrendChart	#role(): javax.accessibility.AccessibleRole
+METHOD	TrendChart	#paintComponent(graphics: Graphics): void
+METHOD	TrendChart	-paintNoSamples(g: Graphics2D, width: int, height: int): void
+METHOD	TrendChart	-plot(g: Graphics2D, width: int, height: int): void
+METHOD	TrendChart	-ceiling(): double
+METHOD	TrendChart	-paintBands(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-paintAxes(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-paintThreshold(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-paintSeries(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-paintArea(g: Graphics2D, line: Path2D.Double, width: int, height: int): void
+METHOD	TrendChart	-paintPoints(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-paintTimeAxis(g: Graphics2D, width: int, height: int): void
+METHOD	TrendChart	-paintTooltip(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-tooltipBounds(metrics: FontMetrics, text: String, px: double, py: double, width: int): java.awt.geom.RoundRectangle2D
+METHOD	TrendChart	-paintCrosshair(g: Graphics2D, px: double, height: int): void
+METHOD	TrendChart	-x(sample: int, width: int): double
+METHOD	TrendChart	-y(aqi: double, height: int, max: double): int
+METHOD	TrendChart	-pointer(): MouseAdapter
+METHOD	TrendChart	-nearest(pointerX: int): int
+METHOD	TrendChart	-highlight(sample: int): void
+METHOD	TrendChart	-bindKeys(): void
+METHOD	TrendChart	-step(delta: int): AbstractAction
+METHOD	TrendChart	-describeChart(): void
+METHOD	TrendChart	+axisCeiling(): int
+TYPE	Atmosphere	CLASS	extends JPanel, implements Themed
+FIELD	Atmosphere	{static} -GRAIN_TILE: int
+FIELD	Atmosphere	{static} -GRAIN_SEED: int
+FIELD	Atmosphere	{static} -GLOW_RADIUS: double
+FIELD	Atmosphere	{static} -SECOND_GLOW_RADIUS: double
+FIELD	Atmosphere	{static} -grain: BufferedImage
+FIELD	Atmosphere	-condition: Color
+FIELD	Atmosphere	-previousCondition: Color
+FIELD	Atmosphere	-blend: double
+FIELD	Atmosphere	-motion: Motion
+METHOD	Atmosphere	+Atmosphere(layout: LayoutManager)
+METHOD	Atmosphere	+setCondition(value: Color): void
+METHOD	Atmosphere	+condition(): Color
+METHOD	Atmosphere	+applyTheme(): void
+METHOD	Atmosphere	#paintComponent(graphics: Graphics): void
+METHOD	Atmosphere	-paintGlows(g: Graphics2D): void
+METHOD	Atmosphere	-blended(): Color
+METHOD	Atmosphere	-currentGlow(): Color
+METHOD	Atmosphere	{static} -neutral(): Color
+METHOD	Atmosphere	-paintGrain(g: Graphics2D, bounds: Rectangle): void
+METHOD	Atmosphere	{static} -grainTile(): BufferedImage
+TYPE	AuroraButton	CLASS	extends JButton, implements Themed
+TYPE	AuroraButton.Kind	ENUM	
+FIELD	AuroraButton.Kind	{static} +PRIMARY: Kind
+FIELD	AuroraButton.Kind	{static} +SECONDARY: Kind
+FIELD	AuroraButton.Kind	{static} +GHOST: Kind
+FIELD	AuroraButton	{static} -PADDING_X: int
+FIELD	AuroraButton	{static} -ICON_GAP: int
+FIELD	AuroraButton	{static} -SPINNER_SIZE: int
+FIELD	AuroraButton	-kind: Kind
+FIELD	AuroraButton	-glyph: Glyph
+FIELD	AuroraButton	-hover: double
+FIELD	AuroraButton	-loading: boolean
+FIELD	AuroraButton	-hoverMotion: Motion
+FIELD	AuroraButton	-spinner: Motion
+FIELD	AuroraButton	-spinAngle: double
+METHOD	AuroraButton	+AuroraButton(text: String, kind: Kind)
+METHOD	AuroraButton	+AuroraButton(text: String, kind: Kind, glyph: Glyph)
+METHOD	AuroraButton	+setLoading(value: boolean): void
+METHOD	AuroraButton	+isLoading(): boolean
+METHOD	AuroraButton	+applyTheme(): void
+METHOD	AuroraButton	+getPreferredSize(): Dimension
+METHOD	AuroraButton	#paintComponent(graphics: Graphics): void
+METHOD	AuroraButton	-paintSurface(g: Graphics2D, shape: RoundRectangle2D): void
+METHOD	AuroraButton	-paintFocus(g: Graphics2D, shape: RoundRectangle2D): void
+METHOD	AuroraButton	-paintContent(g: Graphics2D): void
+METHOD	AuroraButton	-fillColour(): Color
+METHOD	AuroraButton	-accentFill(): Color
+METHOD	AuroraButton	-textColour(): Color
+METHOD	AuroraButton	-trackHover(): void
+METHOD	AuroraButton	-runSpinner(): void
+TYPE	AuroraComponent	CLASS	extends JComponent, implements Themed
+METHOD	AuroraComponent	#AuroraComponent()
+METHOD	AuroraComponent	#role(): AccessibleRole
+METHOD	AuroraComponent	+applyTheme(): void
+METHOD	AuroraComponent	+getAccessibleContext(): AccessibleContext
+TYPE	AuroraComponent.AccessibleAuroraComponent	CLASS	extends AccessibleJComponent
+METHOD	AuroraComponent.AccessibleAuroraComponent	+getAccessibleRole(): AccessibleRole
+TYPE	AuroraLabel	CLASS	extends JLabel, implements Themed
+FIELD	AuroraLabel	-tone: Tone
+METHOD	AuroraLabel	+AuroraLabel(text: String, font: Font, tone: Tone)
+METHOD	AuroraLabel	+tone(): Tone
+METHOD	AuroraLabel	+applyTheme(): void
+TYPE	AuroraScrollBarUI	CLASS	extends BasicScrollBarUI
+FIELD	AuroraScrollBarUI	{static} -THICKNESS: int
+FIELD	AuroraScrollBarUI	{static} -THUMB_INSET: int
+FIELD	AuroraScrollBarUI	{static} -MINIMUM_THUMB: int
+METHOD	AuroraScrollBarUI	{static} +install(bar: JScrollBar): void
+METHOD	AuroraScrollBarUI	#createIncreaseButton(orientation: int): JButton
+METHOD	AuroraScrollBarUI	#createDecreaseButton(orientation: int): JButton
+METHOD	AuroraScrollBarUI	#getMinimumThumbSize(): Dimension
+METHOD	AuroraScrollBarUI	#paintTrack(g: Graphics, host: JComponent, bounds: Rectangle): void
+METHOD	AuroraScrollBarUI	#paintThumb(graphics: Graphics, host: JComponent, bounds: Rectangle): void
+METHOD	AuroraScrollBarUI	-thumbColour(): Color
+METHOD	AuroraScrollBarUI	{static} -hiddenButton(): JButton
+TYPE	Badge	CLASS	extends AuroraComponent
+FIELD	Badge	{static} -PADDING_X: int
+FIELD	Badge	{static} -PADDING_Y: int
+FIELD	Badge	{static} -DOT: int
+FIELD	Badge	{static} -DOT_GAP: int
+FIELD	Badge	-text: String
+FIELD	Badge	-colour: Supplier<Color>
+FIELD	Badge	-showDot: boolean
+METHOD	Badge	+Badge(text: String, tone: Tone)
+METHOD	Badge	+Badge(text: String, colour: Supplier<Color>)
+METHOD	Badge	+set(value: String, tint: Supplier<Color>): void
+METHOD	Badge	+withoutDot(): Badge
+METHOD	Badge	+text(): String
+METHOD	Badge	+getPreferredSize(): Dimension
+METHOD	Badge	#paintComponent(graphics: Graphics): void
+METHOD	Badge	-paintDot(g: Graphics2D, tint: Color): int
+METHOD	Badge	{static} -readable(tint: Color): Color
+TYPE	Card	CLASS	extends JPanel, implements Themed
+FIELD	Card	{static} -SHADOW_ROOM: int
+FIELD	Card	{static} -ACCENT_WIDTH: int
+FIELD	Card	-radius: int
+FIELD	Card	-elevation: int
+FIELD	Card	-accent: Supplier<Color>
+FIELD	Card	-fill: Supplier<Color>
+FIELD	Card	-selected: boolean
+FIELD	Card	-hovered: boolean
+FIELD	Card	-lift: double
+FIELD	Card	-liftMotion: Motion
+METHOD	Card	+Card(layout: LayoutManager)
+METHOD	Card	+Card()
+METHOD	Card	{static} +titled(caption: String, content: JComponent): Card
+METHOD	Card	{static} +titled(caption: String, trailing: JComponent, content: JComponent): Card
+METHOD	Card	+padded(space: int): Card
+METHOD	Card	+radius(value: int): Card
+METHOD	Card	+elevation(level: int): Card
+METHOD	Card	+accent(colour: Supplier<Color>): Card
+METHOD	Card	+fill(colour: Supplier<Color>): Card
+METHOD	Card	+interactive(accessibleName: String, action: Runnable): Card
+METHOD	Card	+setSelected(value: boolean): void
+METHOD	Card	+isSelected(): boolean
+METHOD	Card	+applyTheme(): void
+METHOD	Card	#paintComponent(graphics: Graphics): void
+METHOD	Card	-shape(): RoundRectangle2D
+METHOD	Card	-paintAccent(g: Graphics2D, shape: RoundRectangle2D): void
+METHOD	Card	-paintOutline(g: Graphics2D, shape: RoundRectangle2D): void
+METHOD	Card	-outlineColour(focused: boolean): Color
+METHOD	Card	-pointer(action: Runnable): MouseAdapter
+METHOD	Card	-bindActivation(action: Runnable): void
+METHOD	Card	-setHovered(value: boolean): void
+METHOD	Card	{static} -padding(space: int): EmptyBorder
+TYPE	DataTable	CLASS	extends JTable, implements Themed
+FIELD	DataTable	{static} -DEFAULT_VISIBLE_ROWS: int
+FIELD	DataTable	-numericColumns: int[]
+FIELD	DataTable	-visibleRows: int
+METHOD	DataTable	+DataTable(model: DefaultTableModel, numericColumns: int[])
+METHOD	DataTable	{static} +model(headers: String[]): DefaultTableModel
+METHOD	DataTable	+visibleRows(rows: int): DataTable
+METHOD	DataTable	+getPreferredScrollableViewportSize(): java.awt.Dimension
+METHOD	DataTable	+widths(widths: int[]): void
+METHOD	DataTable	+renderer(column: int, renderer: TableCellRenderer): void
+METHOD	DataTable	+isNumeric(column: int): boolean
+METHOD	DataTable	+applyTheme(): void
+METHOD	DataTable	+prepareRenderer(renderer: TableCellRenderer, row: int, column: int): Component
+METHOD	DataTable	{static} -stripe(): Color
+METHOD	DataTable	-styleHeader(header: JTableHeader): void
+TYPE	DataTable.HeaderRenderer	CLASS	extends DefaultTableCellRenderer
+METHOD	DataTable.HeaderRenderer	+getTableCellRendererComponent(table: JTable, value: Object, selected: boolean, focused: boolean, row: int, column: int): Component
+METHOD	DataTable.HeaderRenderer	#paintComponent(graphics: Graphics): void
+TYPE	DataTable.CellRenderer	CLASS	extends DefaultTableCellRenderer
+METHOD	DataTable.CellRenderer	+getTableCellRendererComponent(table: JTable, value: Object, selected: boolean, focused: boolean, row: int, column: int): Component
+METHOD	DataTable.CellRenderer	-textTone(value: Object): Tone
+METHOD	DataTable	{static} +pill(tint: java.util.function.Function<Object, Color>): TableCellRenderer
+TYPE	DataTable.PillRenderer	CLASS	extends DefaultTableCellRenderer
+FIELD	DataTable.PillRenderer	-tint: java.util.function.Function<Object, Color>
+METHOD	DataTable.PillRenderer	~PillRenderer(tint: java.util.function.Function<Object, Color>)
+METHOD	DataTable.PillRenderer	+getTableCellRendererComponent(table: JTable, value: Object, selected: boolean, focused: boolean, row: int, column: int): Component
+METHOD	DataTable.PillRenderer	#paintComponent(graphics: Graphics): void
+METHOD	DataTable.PillRenderer	-paintPill(graphics: Graphics, colour: Color): void
+METHOD	DataTable	{static} +placeholder(message: String): JLabel
+TYPE	Dropdown	CLASS	extends JComboBox<T>, implements Themed
+FIELD	Dropdown	{static} -PADDING: int
+FIELD	Dropdown	{static} -CHEVRON: int
+METHOD	Dropdown	+Dropdown(values: T[])
+METHOD	Dropdown	+applyTheme(): void
+TYPE	Dropdown.FieldUI	CLASS	extends BasicComboBoxUI
+METHOD	Dropdown.FieldUI	#createArrowButton(): JButton
+METHOD	Dropdown.FieldUI	+paint(graphics: Graphics, host: JComponent): void
+METHOD	Dropdown.FieldUI	-paintLabel(g: Graphics2D, host: JComponent): void
+METHOD	Dropdown.FieldUI	-clip(text: String, metrics: java.awt.FontMetrics, limit: int): String
+METHOD	Dropdown.FieldUI	-paintChevron(g: Graphics2D, host: JComponent): void
+METHOD	Dropdown.FieldUI	#createPopup(): ComboPopup
+TYPE	Dropdown.Renderer	CLASS	extends DefaultListCellRenderer
+METHOD	Dropdown.Renderer	+getListCellRendererComponent(list: JList<?>, value: Object, index: int, selected: boolean, focused: boolean): Component
+TYPE	EmptyState	CLASS	extends JPanel, implements Themed
+FIELD	EmptyState	{static} -HALO: int
+FIELD	EmptyState	-glyph: Glyph
+FIELD	EmptyState	-tint: Tone
+METHOD	EmptyState	{static} +of(glyph: Glyph, title: String, message: String): EmptyState
+METHOD	EmptyState	{static} +withAction(glyph: Glyph, title: String, message: String, action: JComponent): EmptyState
+METHOD	EmptyState	{static} +failure(title: String, message: String, action: JComponent): EmptyState
+METHOD	EmptyState	-EmptyState(glyph: Glyph, title: String, message: String, tint: Tone, action: JComponent)
+METHOD	EmptyState	-content(title: String, message: String, action: JComponent): JPanel
+METHOD	EmptyState	-halo(): JComponent
+TYPE	EmptyState.Halo	CLASS	extends JComponent
+METHOD	EmptyState.Halo	+getPreferredSize(): Dimension
+METHOD	EmptyState.Halo	#paintComponent(graphics: Graphics): void
+METHOD	EmptyState	+applyTheme(): void
+TYPE	FlowGrid	CLASS	implements LayoutManager
+FIELD	FlowGrid	-minimumTileWidth: int
+FIELD	FlowGrid	-maximumColumns: int
+FIELD	FlowGrid	-gap: int
+METHOD	FlowGrid	+FlowGrid(minimumTileWidth: int, maximumColumns: int, gap: int)
+METHOD	FlowGrid	+columnsFor(width: int): int
+METHOD	FlowGrid	+addLayoutComponent(name: String, component: Component): void
+METHOD	FlowGrid	+removeLayoutComponent(component: Component): void
+METHOD	FlowGrid	+preferredLayoutSize(parent: Container): Dimension
+METHOD	FlowGrid	+minimumLayoutSize(parent: Container): Dimension
+METHOD	FlowGrid	+layoutContainer(parent: Container): void
+METHOD	FlowGrid	-placeChildren(parent: Container, insets: Insets, columns: int, cell: int, height: int): void
+METHOD	FlowGrid	{static} -rowCount(children: int, columns: int): int
+METHOD	FlowGrid	{static} -tallestChild(parent: Container): int
+TYPE	Formatting	CLASS	
+FIELD	Formatting	{static} +ABSENT: String
+FIELD	Formatting	{static} +DASH: String
+FIELD	Formatting	{static} +NOT_LOADED: String
+METHOD	Formatting	-Formatting()
+TYPE	IconButton	CLASS	extends JButton, implements Themed
+FIELD	IconButton	-glyph: Glyph
+FIELD	IconButton	-tone: Tone
+METHOD	IconButton	+IconButton(glyph: Glyph, description: String, tone: Tone)
+METHOD	IconButton	+setGlyph(value: Glyph, description: String): void
+METHOD	IconButton	+applyTheme(): void
+METHOD	IconButton	#paintComponent(graphics: Graphics): void
+TYPE	InputSurface	CLASS	implements Border
+FIELD	InputSurface	{static} -PAD_X: int
+FIELD	InputSurface	{static} -PAD_Y: int
+FIELD	InputSurface	-error: boolean
+METHOD	InputSurface	-InputSurface(error: boolean)
+METHOD	InputSurface	{static} +normal(): InputSurface
+METHOD	InputSurface	{static} +invalid(): InputSurface
+METHOD	InputSurface	+paintBorder(host: Component, graphics: Graphics, x: int, y: int, width: int, height: int): void
+METHOD	InputSurface	-outline(focused: boolean): Tone
+METHOD	InputSurface	+getBorderInsets(host: Component): Insets
+METHOD	InputSurface	+isBorderOpaque(): boolean
+TYPE	MetricTile	CLASS	extends Card
+FIELD	MetricTile	{static} -MINIMUM_WIDTH: int
+FIELD	MetricTile	{static} -TILE_HEIGHT: int
+FIELD	MetricTile	-value: AuroraLabel
+FIELD	MetricTile	-reference: AuroraLabel
+FIELD	MetricTile	-spark: Sparkline
+METHOD	MetricTile	+MetricTile(caption: String, accessibleName: String)
+METHOD	MetricTile	+set(measurement: String, context: String): void
+METHOD	MetricTile	+setTrend(samples: List<Integer>, tint: Supplier<Color>): void
+METHOD	MetricTile	+withoutTrend(): MetricTile
+METHOD	MetricTile	+valueLabel(): AuroraLabel
+METHOD	MetricTile	+getPreferredSize(): Dimension
+METHOD	MetricTile	+applyTheme(): void
+METHOD	MetricTile	{static} +minimumWidth(): int
+METHOD	MetricTile	+clear(): void
+METHOD	MetricTile	+present(): void
+TYPE	Panels	CLASS	
+METHOD	Panels	-Panels()
+METHOD	Panels	{static} +of(layout: LayoutManager): JPanel
+METHOD	Panels	{static} +row(gap: int): JPanel
+METHOD	Panels	{static} +column(gap: int): JPanel
+METHOD	Panels	{static} +columns(count: int, gap: int): JPanel
+METHOD	Panels	{static} +rows(gap: int): JPanel
+METHOD	Panels	{static} +stack(gap: int, children: Component[]): JPanel
+METHOD	Panels	{static} +rigid(child: Component): JPanel
+METHOD	Panels	{static} +leading(child: Component): JPanel
+METHOD	Panels	{static} +top(child: Component): JPanel
+METHOD	Panels	{static} +inset(child: Component, space: int): JPanel
+METHOD	Panels	{static} +centred(child: Component): JPanel
+METHOD	Panels	{static} +fixedWidth(child: Component, width: int): JPanel
+TYPE	Panels.FixedWidth	CLASS	extends JPanel
+FIELD	Panels.FixedWidth	-width: int
+METHOD	Panels.FixedWidth	~FixedWidth(width: int)
+METHOD	Panels.FixedWidth	+getPreferredSize(): java.awt.Dimension
+METHOD	Panels.FixedWidth	+getMinimumSize(): java.awt.Dimension
+TYPE	Panels.FixedHeight	CLASS	extends JPanel
+METHOD	Panels.FixedHeight	~FixedHeight()
+METHOD	Panels.FixedHeight	+getMaximumSize(): java.awt.Dimension
+METHOD	Panels	{static} +gap(height: int): Component
+METHOD	Panels	{static} +sectionGap(): Component
+TYPE	Paragraph	CLASS	extends JTextArea, implements Themed
+FIELD	Paragraph	{static} -MINIMUM_WIDTH: int
+FIELD	Paragraph	-tone: Tone
+METHOD	Paragraph	+Paragraph(text: String, tone: Tone)
+METHOD	Paragraph	+Paragraph(text: String, tone: Tone, size: float)
+METHOD	Paragraph	+getPreferredSize(): Dimension
+METHOD	Paragraph	+applyTheme(): void
+TYPE	ScrollableColumn	CLASS	extends JPanel, implements Scrollable, implements Themed
+METHOD	ScrollableColumn	+ScrollableColumn(layout: LayoutManager)
+METHOD	ScrollableColumn	+getPreferredScrollableViewportSize(): Dimension
+METHOD	ScrollableColumn	+getScrollableUnitIncrement(visible: Rectangle, orientation: int, direction: int): int
+METHOD	ScrollableColumn	+getScrollableBlockIncrement(visible: Rectangle, orientation: int, direction: int): int
+METHOD	ScrollableColumn	+getScrollableTracksViewportWidth(): boolean
+METHOD	ScrollableColumn	+getScrollableTracksViewportHeight(): boolean
+METHOD	ScrollableColumn	+applyTheme(): void
+TYPE	Scrolls	CLASS	
+METHOD	Scrolls	-Scrolls()
+METHOD	Scrolls	{static} +vertical(content: Component): JScrollPane
+METHOD	Scrolls	{static} +of(content: Component): JScrollPane
+TYPE	SegmentedControl	CLASS	extends AuroraComponent
+FIELD	SegmentedControl	{static} -PADDING: int
+FIELD	SegmentedControl	{static} -INSET: int
+FIELD	SegmentedControl	-options: List<T>
+FIELD	SegmentedControl	-naming: Function<T, String>
+FIELD	SegmentedControl	-listener: Consumer<T>
+FIELD	SegmentedControl	-selected: int
+FIELD	SegmentedControl	-hovered: int
+FIELD	SegmentedControl	-indicator: double
+FIELD	SegmentedControl	-motion: Motion
+METHOD	SegmentedControl	+SegmentedControl(options: List<T>, naming: Function<T, String>)
+METHOD	SegmentedControl	+onChange(action: Consumer<T>): void
+METHOD	SegmentedControl	+selected(): T
+METHOD	SegmentedControl	+select(value: T): void
+METHOD	SegmentedControl	+getPreferredSize(): Dimension
+METHOD	SegmentedControl	+getMinimumSize(): Dimension
+METHOD	SegmentedControl	+getMaximumSize(): Dimension
+METHOD	SegmentedControl	#role(): javax.accessibility.AccessibleRole
+METHOD	SegmentedControl	#paintComponent(graphics: Graphics): void
+METHOD	SegmentedControl	-paintIndicator(g: Graphics2D): void
+METHOD	SegmentedControl	-paintLabels(g: Graphics2D): void
+METHOD	SegmentedControl	-labelColour(index: int): java.awt.Color
+METHOD	SegmentedControl	-segmentWidth(): double
+METHOD	SegmentedControl	-pointer(): MouseAdapter
+METHOD	SegmentedControl	-indexAt(x: int): int
+METHOD	SegmentedControl	-setHovered(index: int): void
+METHOD	SegmentedControl	-bindKeys(): void
+METHOD	SegmentedControl	-step(delta: int): AbstractAction
+METHOD	SegmentedControl	-choose(index: int): void
+METHOD	SegmentedControl	-slideTo(index: int): void
+METHOD	SegmentedControl	-describe(): void
+TYPE	Skeleton	CLASS	extends AuroraComponent
+FIELD	Skeleton	{static} -SWEEP_WIDTH: int
+FIELD	Skeleton	{static} -CYCLE_MILLIS: int
+FIELD	Skeleton	-preferredHeight: int
+FIELD	Skeleton	-sweep: double
+FIELD	Skeleton	-motion: Motion
+METHOD	Skeleton	+Skeleton(height: int)
+METHOD	Skeleton	+getPreferredSize(): Dimension
+METHOD	Skeleton	+addNotify(): void
+METHOD	Skeleton	+removeNotify(): void
+METHOD	Skeleton	#role(): javax.accessibility.AccessibleRole
+METHOD	Skeleton	#paintComponent(graphics: Graphics): void
+METHOD	Skeleton	-sweepPaint(): LinearGradientPaint
+METHOD	Skeleton	-start(): void
+TYPE	Sparkline	CLASS	extends AuroraComponent
+FIELD	Sparkline	{static} -HEIGHT: int
+FIELD	Sparkline	{static} -DOT: int
+FIELD	Sparkline	{static} -INSET: int
+FIELD	Sparkline	-values: List<Integer>
+FIELD	Sparkline	-colour: Supplier<Color>
+METHOD	Sparkline	+Sparkline()
+METHOD	Sparkline	+setValues(samples: List<Integer>, tint: Supplier<Color>): void
+METHOD	Sparkline	+describe(): String
+METHOD	Sparkline	#paintComponent(graphics: Graphics): void
+METHOD	Sparkline	-paintPlaceholder(g: Graphics2D): void
+METHOD	Sparkline	-paintTrace(g: Graphics2D): void
+METHOD	Sparkline	-paintFill(g: Graphics2D, line: Path2D.Double): void
+METHOD	Sparkline	-yFor(value: int, lowest: int, span: double): double
+TYPE	Spinners	CLASS	
+FIELD	Spinners	{static} -SWEEP: int
+FIELD	Spinners	{static} -WEIGHT: float
+METHOD	Spinners	-Spinners()
+METHOD	Spinners	{static} +paint(graphics: Graphics2D, x: double, y: double, size: double, angle: double, colour: Color): void
+TYPE	Stepper	CLASS	extends JSpinner, implements Themed
+FIELD	Stepper	{static} -BUTTON_WIDTH: int
+FIELD	Stepper	{static} -ARROW: int
+METHOD	Stepper	+Stepper(value: int, minimum: int, maximum: int)
+METHOD	Stepper	+applyTheme(): void
+METHOD	Stepper	#paintComponent(graphics: Graphics): void
+TYPE	Stepper.StepperUI	CLASS	extends BasicSpinnerUI
+METHOD	Stepper.StepperUI	#createNextButton(): Component
+METHOD	Stepper.StepperUI	#createPreviousButton(): Component
+METHOD	Stepper.StepperUI	-arrow(up: boolean, name: String): Component
+METHOD	Stepper.StepperUI	-installButtonListeners(button: JButton, up: boolean): void
+TYPE	Stepper.ArrowButton	CLASS	extends JButton
+FIELD	Stepper.ArrowButton	-up: boolean
+METHOD	Stepper.ArrowButton	~ArrowButton(up: boolean)
+METHOD	Stepper.ArrowButton	#paintComponent(graphics: Graphics): void
+METHOD	Stepper.ArrowButton	-paintArrow(g: Graphics2D, host: JComponent): void
+TYPE	Text	CLASS	
+METHOD	Text	-Text()
+METHOD	Text	{static} +title(value: String): AuroraLabel
+METHOD	Text	{static} +heading(value: String): AuroraLabel
+METHOD	Text	{static} +caption(value: String): AuroraLabel
+METHOD	Text	{static} +body(value: String): AuroraLabel
+METHOD	Text	{static} +muted(value: String): AuroraLabel
+METHOD	Text	{static} +micro(value: String): AuroraLabel
+METHOD	Text	{static} +value(value: String): AuroraLabel
+METHOD	Text	{static} +number(value: String): AuroraLabel
+METHOD	Text	{static} +paragraph(value: String): Paragraph
+METHOD	Text	{static} +note(value: String): Paragraph
+METHOD	Text	{static} +named(control: T, name: String): T
+METHOD	Text	{static} +described(control: T, name: String, description: String): T
+TYPE	TextArea	CLASS	extends JTextArea, implements Themed
+FIELD	TextArea	-invalid: boolean
+METHOD	TextArea	+TextArea(rows: int)
+METHOD	TextArea	+setInvalid(value: boolean): void
+METHOD	TextArea	+isInvalid(): boolean
+METHOD	TextArea	+applyTheme(): void
+METHOD	TextArea	#paintComponent(graphics: Graphics): void
+TYPE	ToggleSwitch	CLASS	extends JCheckBox, implements Themed
+FIELD	ToggleSwitch	{static} -TRACK_WIDTH: int
+FIELD	ToggleSwitch	{static} -TRACK_HEIGHT: int
+FIELD	ToggleSwitch	{static} -KNOB_INSET: int
+FIELD	ToggleSwitch	{static} -LABEL_GAP: int
+FIELD	ToggleSwitch	-position: double
+FIELD	ToggleSwitch	-quiet: boolean
+FIELD	ToggleSwitch	-motion: Motion
+METHOD	ToggleSwitch	+ToggleSwitch(label: String)
+METHOD	ToggleSwitch	+setSelectedQuietly(value: boolean): void
+METHOD	ToggleSwitch	+applyTheme(): void
+METHOD	ToggleSwitch	+getPreferredSize(): Dimension
+METHOD	ToggleSwitch	#paintComponent(graphics: Graphics): void
+METHOD	ToggleSwitch	-paintTrack(g: Graphics2D, top: int): void
+METHOD	ToggleSwitch	-paintKnob(g: Graphics2D, top: int): void
+METHOD	ToggleSwitch	-paintTick(g: Graphics2D, x: double, middle: double, size: double): void
+METHOD	ToggleSwitch	-paintLabel(g: Graphics2D): void
+METHOD	ToggleSwitch	-animate(): void
+TYPE	AuroraTheme	ENUM	
+FIELD	AuroraTheme	{static} +DARK: AuroraTheme
+FIELD	AuroraTheme	{static} +LIGHT: AuroraTheme
+FIELD	AuroraTheme	-label: String
+FIELD	AuroraTheme	-dark: boolean
+FIELD	AuroraTheme	-colours: Map<Tone, Color>
+METHOD	AuroraTheme	~AuroraTheme(label: String, dark: boolean, colours: Map<Tone, Color>)
+METHOD	AuroraTheme	+color(tone: Tone): Color
+METHOD	AuroraTheme	+isDark(): boolean
+METHOD	AuroraTheme	+toString(): String
+METHOD	AuroraTheme	{static} -darkTheme(): Map<Tone, Color>
+METHOD	AuroraTheme	{static} -darkSurfaces(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -darkText(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -darkAccents(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -darkStatus(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -darkChrome(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -lightTheme(): Map<Tone, Color>
+METHOD	AuroraTheme	{static} -lightSurfaces(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -lightText(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -lightAccents(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -lightStatus(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -lightChrome(map: Map<Tone, Color>): void
+METHOD	AuroraTheme	{static} -rgb(value: int): Color
+METHOD	AuroraTheme	{static} -rgba(value: int, alpha: int): Color
+TYPE	Glyph	ENUM	
+FIELD	Glyph	{static} +OVERVIEW: Glyph
+FIELD	Glyph	{static} +PULSE: Glyph
+FIELD	Glyph	{static} +PLANNER: Glyph
+FIELD	Glyph	{static} +REPORTS: Glyph
+FIELD	Glyph	{static} +BELL: Glyph
+FIELD	Glyph	{static} +DATABASE: Glyph
+FIELD	Glyph	{static} +SETTINGS: Glyph
+FIELD	Glyph	{static} +REFRESH: Glyph
+FIELD	Glyph	{static} +COMPARE: Glyph
+FIELD	Glyph	{static} +SUN: Glyph
+FIELD	Glyph	{static} +MOON: Glyph
+FIELD	Glyph	{static} +CHEVRON_LEFT: Glyph
+FIELD	Glyph	{static} +CHEVRON_RIGHT: Glyph
+FIELD	Glyph	{static} +CHECK: Glyph
+FIELD	Glyph	{static} +WARNING: Glyph
+FIELD	Glyph	{static} +INFO: Glyph
+FIELD	Glyph	{static} +CLOSE: Glyph
+FIELD	Glyph	{static} +EXTERNAL: Glyph
+FIELD	Glyph	{static} +LEAF: Glyph
+FIELD	Glyph	{static} +CLOCK: Glyph
+FIELD	Glyph	{static} +PIN: Glyph
+FIELD	Glyph	{static} +FILTER: Glyph
+FIELD	Glyph	{static} +EMPTY: Glyph
+FIELD	Glyph	{static} +GRID: double
+FIELD	Glyph	{static} -WEIGHT: float
+METHOD	Glyph	~draw(g: Graphics2D): void
+METHOD	Glyph	+paint(graphics: Graphics2D, x: double, y: double, size: double): void
+METHOD	Glyph	{static} -rounded(x: double, y: double, w: double, h: double): RoundRectangle2D
+METHOD	Glyph	{static} -bar(x: double, y: double, w: double, h: double): RoundRectangle2D
+METHOD	Glyph	{static} -chevron(g: Graphics2D, pointingLeft: boolean): void
+TYPE	Icons	CLASS	
+FIELD	Icons	{static} +SMALL: int
+FIELD	Icons	{static} +MEDIUM: int
+FIELD	Icons	{static} +LARGE: int
+METHOD	Icons	-Icons()
+METHOD	Icons	{static} +of(glyph: Glyph, size: int, tone: Tone): Icon
+METHOD	Icons	{static} +of(glyph: Glyph, size: int, colour: Supplier<Color>): Icon
+TYPE	Icons.GlyphIcon	RECORD	implements Icon
+FIELD	Icons.GlyphIcon	-glyph: Glyph
+FIELD	Icons.GlyphIcon	-size: int
+FIELD	Icons.GlyphIcon	-colour: Supplier<Color>
+METHOD	Icons.GlyphIcon	+paintIcon(host: Component, g: Graphics, x: int, y: int): void
+METHOD	Icons.GlyphIcon	+getIconWidth(): int
+METHOD	Icons.GlyphIcon	+getIconHeight(): int
+TYPE	Metrics	CLASS	
+FIELD	Metrics	{static} +SPACE_1: int
+FIELD	Metrics	{static} +SPACE_2: int
+FIELD	Metrics	{static} +SPACE_3: int
+FIELD	Metrics	{static} +SPACE_4: int
+FIELD	Metrics	{static} +SPACE_5: int
+FIELD	Metrics	{static} +SPACE_6: int
+FIELD	Metrics	{static} +SPACE_7: int
+FIELD	Metrics	{static} +SPACE_8: int
+FIELD	Metrics	{static} +RADIUS_SMALL: int
+FIELD	Metrics	{static} +RADIUS_CONTROL: int
+FIELD	Metrics	{static} +RADIUS_CARD: int
+FIELD	Metrics	{static} +RADIUS_HERO: int
+FIELD	Metrics	{static} +RADIUS_PILL: int
+FIELD	Metrics	{static} +CONTROL_HEIGHT: int
+FIELD	Metrics	{static} +CONTROL_HEIGHT_COMPACT: int
+FIELD	Metrics	{static} +ICON_BUTTON: int
+FIELD	Metrics	{static} +ROW_HEIGHT: int
+FIELD	Metrics	{static} +HEADER_HEIGHT: int
+FIELD	Metrics	{static} +RAIL_WIDTH: int
+FIELD	Metrics	{static} +RAIL_WIDTH_COLLAPSED: int
+FIELD	Metrics	{static} +TOP_BAR_HEIGHT: int
+FIELD	Metrics	{static} +STATUS_BAR_HEIGHT: int
+FIELD	Metrics	{static} +STROKE_HAIRLINE: float
+FIELD	Metrics	{static} +STROKE_EMPHASIS: float
+FIELD	Metrics	{static} +STROKE_SERIES: float
+FIELD	Metrics	{static} +MOTION_FAST: int
+FIELD	Metrics	{static} +MOTION_BASE: int
+FIELD	Metrics	{static} +MOTION_SLOW: int
+FIELD	Metrics	{static} +MOTION_DATA: int
+FIELD	Metrics	{static} +FRAME_MILLIS: int
+FIELD	Metrics	{static} +MIN_WINDOW_WIDTH: int
+FIELD	Metrics	{static} +MIN_WINDOW_HEIGHT: int
+FIELD	Metrics	{static} +WINDOW_WIDTH: int
+FIELD	Metrics	{static} +WINDOW_HEIGHT: int
+FIELD	Metrics	{static} +RAIL_COLLAPSE_WIDTH: int
+FIELD	Metrics	{static} +STACK_WIDTH: int
+METHOD	Metrics	-Metrics()
+TYPE	Motion	CLASS	
+FIELD	Motion	-timer: Timer
+FIELD	Motion	-start: long
+FIELD	Motion	-duration: int
+FIELD	Motion	-frame: DoubleConsumer
+METHOD	Motion	-Motion(duration: int, frame: DoubleConsumer)
+METHOD	Motion	{static} +play(durationMillis: int, frame: DoubleConsumer): Motion
+METHOD	Motion	+cancel(): void
+METHOD	Motion	+isRunning(): boolean
+METHOD	Motion	{static} +easeOut(t: double): double
+METHOD	Motion	{static} +easeInOut(t: double): double
+METHOD	Motion	-begin(): void
+METHOD	Motion	-tick(): void
+METHOD	Motion	{static} -clamp(value: double): double
+TYPE	Paints	CLASS	
+FIELD	Paints	{static} -SHADOW_LAYERS: int
+FIELD	Paints	{static} -GLOW_SPREAD: float
+METHOD	Paints	-Paints()
+METHOD	Paints	{static} +quality(g: Graphics2D): Graphics2D
+METHOD	Paints	{static} +round(x: double, y: double, width: double, height: double, radius: double): RoundRectangle2D
+METHOD	Paints	{static} +alpha(colour: Color, value: int): Color
+METHOD	Paints	{static} +fade(colour: Color, fraction: double): Color
+METHOD	Paints	{static} +mix(from: Color, to: Color, amount: double): Color
+METHOD	Paints	{static} +vertical(y: double, height: double, top: Color, bottom: Color): GradientPaint
+METHOD	Paints	{static} +horizontal(x: double, width: double, left: Color, right: Color): GradientPaint
+METHOD	Paints	{static} +glow(centreX: double, centreY: double, radius: double, colour: Color): RadialGradientPaint
+METHOD	Paints	{static} +shadow(g: Graphics2D, shape: Shape, colour: Color, spread: int, offsetY: int): void
+METHOD	Paints	{static} +fill(g: Graphics2D, shape: Shape, colour: Color, opacity: double): void
+METHOD	Paints	{static} -channel(from: int, to: int, t: double): int
+METHOD	Paints	{static} -clampByte(value: int): int
+METHOD	Paints	{static} -clampUnit(value: double): double
+TYPE	Skin	CLASS	
+FIELD	Skin	{static} -theme: AuroraTheme
+FIELD	Skin	{static} -reducedMotion: boolean
+METHOD	Skin	-Skin()
+METHOD	Skin	{static} +theme(): AuroraTheme
+METHOD	Skin	{static} +color(tone: Tone): Color
+METHOD	Skin	{static} +color(tone: Tone, alpha: int): Color
+METHOD	Skin	{static} +setTheme(value: AuroraTheme): void
+METHOD	Skin	{static} +reducedMotion(): boolean
+METHOD	Skin	{static} +setReducedMotion(value: boolean): void
+METHOD	Skin	{static} +duration(milliseconds: int): int
+METHOD	Skin	{static} +refresh(root: Component): void
+METHOD	Skin	{static} +installDefaults(): void
+TYPE	Themed	INTERFACE	
+METHOD	Themed	{abstract} +applyTheme(): void
+TYPE	Tone	ENUM	
+FIELD	Tone	{static} +CANVAS: Tone
+FIELD	Tone	{static} +CANVAS_EDGE: Tone
+FIELD	Tone	{static} +SURFACE: Tone
+FIELD	Tone	{static} +SURFACE_RAISED: Tone
+FIELD	Tone	{static} +SURFACE_SUNKEN: Tone
+FIELD	Tone	{static} +STROKE: Tone
+FIELD	Tone	{static} +STROKE_STRONG: Tone
+FIELD	Tone	{static} +INK: Tone
+FIELD	Tone	{static} +INK_MUTED: Tone
+FIELD	Tone	{static} +INK_FAINT: Tone
+FIELD	Tone	{static} +INK_INVERSE: Tone
+FIELD	Tone	{static} +ACCENT: Tone
+FIELD	Tone	{static} +ACCENT_HOVER: Tone
+FIELD	Tone	{static} +ACCENT_PRESSED: Tone
+FIELD	Tone	{static} +ACCENT_SOFT: Tone
+FIELD	Tone	{static} +ON_ACCENT: Tone
+FIELD	Tone	{static} +FOCUS: Tone
+FIELD	Tone	{static} +POSITIVE: Tone
+FIELD	Tone	{static} +CAUTION: Tone
+FIELD	Tone	{static} +DANGER: Tone
+FIELD	Tone	{static} +DANGER_SOFT: Tone
+FIELD	Tone	{static} +INFO: Tone
+FIELD	Tone	{static} +RAIL: Tone
+FIELD	Tone	{static} +RAIL_EDGE: Tone
+FIELD	Tone	{static} +RAIL_INK: Tone
+FIELD	Tone	{static} +RAIL_INK_MUTED: Tone
+FIELD	Tone	{static} +RAIL_ACTIVE: Tone
+FIELD	Tone	{static} +SHADOW: Tone
+FIELD	Tone	{static} +GLOW: Tone
+FIELD	Tone	{static} +SKELETON: Tone
+FIELD	Tone	{static} +GRID: Tone
+FIELD	Tone	{static} +TOOLTIP: Tone
+FIELD	Tone	{static} +TOOLTIP_INK: Tone
+FIELD	Tone	{static} +SCRIM: Tone
+TYPE	Type	CLASS	
+FIELD	Type	{static} +DISPLAY: float
+FIELD	Type	{static} +TITLE: float
+FIELD	Type	{static} +HEADING: float
+FIELD	Type	{static} +VALUE: float
+FIELD	Type	{static} +BODY: float
+FIELD	Type	{static} +LABEL: float
+FIELD	Type	{static} +CAPTION: float
+FIELD	Type	{static} +MICRO: float
+FIELD	Type	{static} +CAPTION_TRACKING: float
+FIELD	Type	{static} -TEXT_FAMILY: String
+FIELD	Type	{static} -STRONG_FAMILY: String
+FIELD	Type	{static} -NUMBER_FAMILY: String
+METHOD	Type	-Type()
+METHOD	Type	{static} +text(size: float): Font
+METHOD	Type	{static} +strong(size: float): Font
+METHOD	Type	{static} +bold(size: float): Font
+METHOD	Type	{static} +number(size: float): Font
+METHOD	Type	{static} +numberStrong(size: float): Font
+METHOD	Type	{static} +caption(): Font
+METHOD	Type	{static} +textFamily(): String
+METHOD	Type	{static} +numberFamily(): String
+METHOD	Type	{static} -resolve(preferred: String[]): String
+TYPE	DistrictStrip	CLASS	extends JPanel, implements Themed
+FIELD	DistrictStrip	{static} -CARD_WIDTH: int
+FIELD	DistrictStrip	{static} -CARD_HEIGHT: int
+FIELD	DistrictStrip	-cards: Map<District, AreaCard>
 FIELD	DistrictStrip	-chooser: Consumer<District>
 METHOD	DistrictStrip	~DistrictStrip()
-METHOD	DistrictStrip	-card(item: District): JPanel
-METHOD	DistrictStrip	{static} -chip(): JLabel
-METHOD	DistrictStrip	{static} -names(item: District, category: JLabel): JPanel
-METHOD	DistrictStrip	-clickable(card: JPanel, item: District): void
 METHOD	DistrictStrip	~onChoose(action: Consumer<District>): void
-METHOD	DistrictStrip	~render(results: Map<District, Result>, selected: District): void
-METHOD	DistrictStrip	{static} -paintCategory(category: JLabel, result: Result, reading: Reading): void
+METHOD	DistrictStrip	~render(state: ViewState): void
+METHOD	DistrictStrip	+applyTheme(): void
+TYPE	DistrictStrip.AreaCard	CLASS	extends Card
+FIELD	DistrictStrip.AreaCard	-area: District
+FIELD	DistrictStrip.AreaCard	-value: AuroraLabel
+FIELD	DistrictStrip.AreaCard	-category: Badge
+FIELD	DistrictStrip.AreaCard	-relation: AuroraLabel
+FIELD	DistrictStrip.AreaCard	-spark: Sparkline
+METHOD	DistrictStrip.AreaCard	~AreaCard(area: District, choose: Runnable)
+METHOD	DistrictStrip.AreaCard	-details(): JComponent
+METHOD	DistrictStrip.AreaCard	-figure(): JComponent
+METHOD	DistrictStrip.AreaCard	~render(result: Result, selected: boolean, current: District, all: Map<District, Result>, history: List<Reading>): void
+METHOD	DistrictStrip.AreaCard	-renderCategory(result: Result, reading: Reading): void
+METHOD	DistrictStrip.AreaCard	-relationText(reading: Reading, selected: boolean, current: District, all: Map<District, Result>): String
+METHOD	DistrictStrip.AreaCard	-describe(reading: Reading): void
 TYPE	Formats	CLASS	
-FIELD	Formats	{static} ~MISSING: String
-FIELD	Formats	{static} ~DASH: String
+FIELD	Formats	{static} +MISSING: String
+FIELD	Formats	{static} +DASH: String
 FIELD	Formats	{static} -FULL: DateTimeFormatter
 FIELD	Formats	{static} -SHORT: DateTimeFormatter
+FIELD	Formats	{static} -HOUR: DateTimeFormatter
 METHOD	Formats	-Formats()
-METHOD	Formats	{static} ~time(value: Instant): String
-METHOD	Formats	{static} ~shortTime(value: Instant): String
-METHOD	Formats	{static} ~quantity(value: Double): String
-METHOD	Formats	{static} ~source(result: Result, fixture: boolean): String
-METHOD	Formats	{static} ~tableSource(result: Result, fixture: boolean): String
-TYPE	MonitorPanel	CLASS	extends JPanel, implements MonitorController.View
-FIELD	MonitorPanel	{static} -WINDOW_WIDTH: int
-FIELD	MonitorPanel	{static} -WINDOW_HEIGHT: int
-FIELD	MonitorPanel	{static} -RAIL_WIDTH: int
-FIELD	MonitorPanel	{static} -TAB_KEY_BASE: int
-FIELD	MonitorPanel	{static} -NO_DATA: String
-FIELD	MonitorPanel	{static} -SAVED: String
-FIELD	MonitorPanel	-tabs: JTabbedPane
-FIELD	MonitorPanel	-district: JComboBox<District>
-FIELD	MonitorPanel	-profile: JComboBox<AdviceProfile>
-FIELD	MonitorPanel	-refresh: JButton
-FIELD	MonitorPanel	-refreshAll: JButton
-FIELD	MonitorPanel	-dashboard: JTextArea
-FIELD	MonitorPanel	-advice: JTextArea
-FIELD	MonitorPanel	-status: JLabel
-FIELD	MonitorPanel	-latestAlert: JLabel
-FIELD	MonitorPanel	-progress: JProgressBar
-FIELD	MonitorPanel	-overview: OverviewPane
-FIELD	MonitorPanel	-monitoring: MonitoringPane
-FIELD	MonitorPanel	-advicePane: AdvicePane
-FIELD	MonitorPanel	-reportsPane: ReportsPane
-FIELD	MonitorPanel	-alertsPane: AlertsPane
-FIELD	MonitorPanel	-results: Map<District, ReadingService.Result>
-FIELD	MonitorPanel	-trends: Map<District, List<Reading>>
-FIELD	MonitorPanel	-settings: ViewPreferences
-FIELD	MonitorPanel	-fixture: boolean
-FIELD	MonitorPanel	-controller: MonitorController
-METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences)
-METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences, fixture: boolean)
-METHOD	MonitorPanel	+bind(controller: MonitorController): void
-METHOD	MonitorPanel	-header(): JPanel
-METHOD	MonitorPanel	{static} -brand(): JPanel
-METHOD	MonitorPanel	-controls(): JPanel
-METHOD	MonitorPanel	-statusBar(): JPanel
-METHOD	MonitorPanel	-addScreens(): void
-METHOD	MonitorPanel	-shortcuts(): void
-METHOD	MonitorPanel	-restoreSettings(): void
-METHOD	MonitorPanel	-selectedDistrict(): District
-METHOD	MonitorPanel	-selectedProfile(): AdviceProfile
-METHOD	MonitorPanel	-changeDistrict(): void
-METHOD	MonitorPanel	-changeProfile(): void
-METHOD	MonitorPanel	-changeSubscription(item: District, enabled: boolean): void
-METHOD	MonitorPanel	-changeThreshold(value: int): void
-METHOD	MonitorPanel	+loading(value: boolean): void
-METHOD	MonitorPanel	+reportSaving(value: boolean): void
-METHOD	MonitorPanel	+reading(item: District, result: ReadingService.Result, recent: List<Reading>): void
-METHOD	MonitorPanel	-renderSelection(): void
-METHOD	MonitorPanel	-dashboardText(result: ReadingService.Result, source: String): String
-METHOD	MonitorPanel	-showReadingStatus(item: District, result: ReadingService.Result): void
-METHOD	MonitorPanel	+reports(entries: List<CitizenReport>): void
-METHOD	MonitorPanel	+message(text: String, error: boolean): void
-METHOD	MonitorPanel	+alert(history: List<AlertMonitor.Alert>, delivered: AlertMonitor.Alert): void
-TYPE	MonitoringPane	CLASS	extends JPanel
-FIELD	MonitoringPane	{static} -DISTRICT_HEIGHT: int
+METHOD	Formats	{static} +time(value: Instant): String
+METHOD	Formats	{static} +shortTime(value: Instant): String
+METHOD	Formats	{static} +hour(value: Instant): String
+METHOD	Formats	{static} +quantity(value: Double): String
+METHOD	Formats	{static} +amount(value: Double): String
+METHOD	Formats	{static} +since(moment: Instant, now: Instant): String
+METHOD	Formats	{static} +source(result: Result, fixture: boolean): String
+METHOD	Formats	{static} +tableSource(result: Result, fixture: boolean): String
+METHOD	Formats	{static} +state(result: Result, fixture: boolean): String
+TYPE	InsightList	CLASS	extends JPanel, implements Themed
+FIELD	InsightList	{static} -MARKER: int
+METHOD	InsightList	~InsightList()
+METHOD	InsightList	~render(insights: List<Insight>): void
+METHOD	InsightList	+applyTheme(): void
+METHOD	InsightList	{static} -describe(insights: List<Insight>): String
+METHOD	InsightList	-row(insight: Insight): JComponent
+METHOD	InsightList	-marker(insight: Insight): JComponent
+TYPE	InsightList.LevelDot	CLASS	extends cityair.view.component.AuroraComponent
+FIELD	InsightList.LevelDot	-glyph: Glyph
+FIELD	InsightList.LevelDot	-tone: Tone
+METHOD	InsightList.LevelDot	~LevelDot(glyph: Glyph, tone: Tone)
+METHOD	InsightList.LevelDot	+getPreferredSize(): Dimension
+METHOD	InsightList.LevelDot	#paintComponent(graphics: Graphics): void
+METHOD	InsightList	{static} -tone(insight: Insight): Tone
+METHOD	InsightList	{static} -glyph(level: InsightEngine.Level): Glyph
+TYPE	MonitoringPane	CLASS	extends JPanel, implements Themed
+FIELD	MonitoringPane	{static} -TREND_HEIGHT: int
+FIELD	MonitoringPane	{static} -GEOGRAPHY_HEIGHT: int
+FIELD	MonitoringPane	{static} -COMPARISON_WIDTH: int
 FIELD	MonitoringPane	{static} -CATEGORY_COLUMN: int
 FIELD	MonitoringPane	{static} -DISTRICT_WIDTHS: int[]
 FIELD	MonitoringPane	{static} -SAMPLE_WIDTHS: int[]
 FIELD	MonitoringPane	-districts: DefaultTableModel
 FIELD	MonitoringPane	-samples: DefaultTableModel
+FIELD	MonitoringPane	-comparison: ComparisonBars
+FIELD	MonitoringPane	-plot: AreaPlot
 FIELD	MonitoringPane	-chart: TrendChart
+FIELD	MonitoringPane	-samplesStat: AuroraLabel
+FIELD	MonitoringPane	-lowestStat: AuroraLabel
+FIELD	MonitoringPane	-highestStat: AuroraLabel
+FIELD	MonitoringPane	-averageStat: AuroraLabel
+FIELD	MonitoringPane	-changeStat: AuroraLabel
 METHOD	MonitoringPane	~MonitoringPane()
-METHOD	MonitoringPane	~render(selected: District, states: Map<District, Result>, history: List<Reading>, origin: Function<Result, String>, threshold: int): void
-METHOD	MonitoringPane	{static} -districtRow(d: District, result: Result, origin: Function<Result, String>): Object[]
-METHOD	MonitoringPane	{static} -sampleRow(r: Reading): Object[]
-METHOD	MonitoringPane	{static} -value(v: Double): Object
-METHOD	MonitoringPane	{static} -tableModel(headers: String[]): DefaultTableModel
-METHOD	MonitoringPane	{static} -tableFor(model: DefaultTableModel, name: String, widths: int[]): JTable
-TYPE	MonitoringPane.CategoryRenderer	CLASS	extends DefaultTableCellRenderer
-METHOD	MonitoringPane.CategoryRenderer	+getTableCellRendererComponent(table: JTable, value: Object, selected: boolean, focused: boolean, row: int, column: int): Component
+METHOD	MonitoringPane	~onDistrictChosen(action: Consumer<District>): void
+METHOD	MonitoringPane	~render(state: ViewState): void
+METHOD	MonitoringPane	-renderSummary(summary: TrendSummary): void
+METHOD	MonitoringPane	{static} -changeText(summary: TrendSummary): String
+METHOD	MonitoringPane	{static} -changeTone(summary: TrendSummary): Tone
+METHOD	MonitoringPane	-trend(): JComponent
+METHOD	MonitoringPane	-geography(): JComponent
+METHOD	MonitoringPane	-table(): JComponent
+METHOD	MonitoringPane	{static} -categoryTint(value: Object): Color
+METHOD	MonitoringPane	-summaryStrip(): JComponent
+METHOD	MonitoringPane	{static} -stat(caption: String, value: AuroraLabel): JComponent
+METHOD	MonitoringPane	{static} -statValue(): AuroraLabel
+METHOD	MonitoringPane	{static} -districtRow(area: District, result: Result, fixture: boolean): Object[]
+METHOD	MonitoringPane	{static} -sampleRow(reading: Reading): Object[]
+METHOD	MonitoringPane	{static} -cell(value: Double): Object
+METHOD	MonitoringPane	{static} -describeSample(reading: Reading, detailed: boolean): String
+METHOD	MonitoringPane	~sampleColumn(column: int): List<Object>
+METHOD	MonitoringPane	+applyTheme(): void
+TYPE	MonitorPanel	CLASS	extends Atmosphere, implements MonitorController.View
+FIELD	MonitorPanel	{static} -TAB_KEY_BASE: int
+FIELD	MonitorPanel	{static} -NO_DATA: String
+FIELD	MonitorPanel	{static} -SAVED: String
+FIELD	MonitorPanel	-tabs: JTabbedPane
+FIELD	MonitorPanel	-rail: NavigationRailUI
+FIELD	MonitorPanel	-topBar: TopBar
+FIELD	MonitorPanel	-statusBar: StatusBar
+FIELD	MonitorPanel	-provenance: JTextArea
+FIELD	MonitorPanel	-adviceDetail: JTextArea
+FIELD	MonitorPanel	-profile: cityair.view.component.Dropdown<AdviceProfile>
+FIELD	MonitorPanel	-overview: OverviewPane
+FIELD	MonitorPanel	-monitoring: MonitoringPane
+FIELD	MonitorPanel	-planner: PlannerPane
+FIELD	MonitorPanel	-reportsPane: ReportsPane
+FIELD	MonitorPanel	-alertsPane: AlertsPane
+FIELD	MonitorPanel	-settingsPane: SettingsPane
+FIELD	MonitorPanel	-results: Map<District, ReadingService.Result>
+FIELD	MonitorPanel	-trends: Map<District, List<Reading>>
+FIELD	MonitorPanel	-settings: ViewPreferences
+FIELD	MonitorPanel	-clock: Clock
+FIELD	MonitorPanel	-fixture: boolean
+FIELD	MonitorPanel	-lastSuccess: Instant
+FIELD	MonitorPanel	-controller: MonitorController
+METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences)
+METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences, fixture: boolean)
+METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences, fixture: boolean, clock: Clock)
+METHOD	MonitorPanel	-assemble(): void
+METHOD	MonitorPanel	+bind(controller: MonitorController): void
+METHOD	MonitorPanel	-bindSettings(controller: MonitorController): void
+METHOD	MonitorPanel	+loadOnStart(): void
+METHOD	MonitorPanel	-addScreens(): void
+METHOD	MonitorPanel	-addMonitoringScreens(): void
+METHOD	MonitorPanel	-addResponseScreens(): void
+METHOD	MonitorPanel	-addReferenceScreens(): void
+METHOD	MonitorPanel	-addScreen(tab: String, title: String, subtitle: String, content: JComponent): void
+METHOD	MonitorPanel	-scrollToTop(): void
+METHOD	MonitorPanel	-shortcuts(): void
+METHOD	MonitorPanel	-bind(key: int, modifiers: int, name: String, action: Runnable): void
+METHOD	MonitorPanel	-responsiveRail(): void
+METHOD	MonitorPanel	-restoreSettings(): void
+METHOD	MonitorPanel	{static} -dataFolder(): Path
+METHOD	MonitorPanel	-selectedDistrict(): District
+METHOD	MonitorPanel	-selectedProfile(): AdviceProfile
+METHOD	MonitorPanel	-selectDistrict(area: District): void
+METHOD	MonitorPanel	-changeDistrict(): void
+METHOD	MonitorPanel	-changeProfile(): void
+METHOD	MonitorPanel	-changeSubscription(area: District, enabled: boolean): void
+METHOD	MonitorPanel	-changeThreshold(value: int): void
+METHOD	MonitorPanel	-toggleTheme(): void
+METHOD	MonitorPanel	-applyTheme(value: AuroraTheme): void
+METHOD	MonitorPanel	-applyReducedMotion(value: boolean): void
+METHOD	MonitorPanel	-setRailCollapsed(collapsed: boolean): void
+METHOD	MonitorPanel	+loading(value: boolean): void
+METHOD	MonitorPanel	+reportSaving(value: boolean): void
+METHOD	MonitorPanel	+reading(area: District, result: ReadingService.Result, recent: List<Reading>): void
+METHOD	MonitorPanel	-renderSelection(): void
+METHOD	MonitorPanel	-state(): ViewState
+METHOD	MonitorPanel	{static} -stateTone(result: ReadingService.Result): Tone
+METHOD	MonitorPanel	-provenanceText(state: ViewState): String
+METHOD	MonitorPanel	-showReadingStatus(area: District, result: ReadingService.Result): void
+METHOD	MonitorPanel	+reports(entries: List<CitizenReport>): void
+METHOD	MonitorPanel	+message(text: String, error: boolean): void
+METHOD	MonitorPanel	+alert(history: List<AlertMonitor.Alert>, delivered: AlertMonitor.Alert): void
+METHOD	MonitorPanel	{static} -provenanceArea(): JTextArea
+METHOD	MonitorPanel	{static} -detailArea(): JTextArea
+METHOD	MonitorPanel	~intensity(): ActivityIntensity
+METHOD	MonitorPanel	~window(): ActivityWindow
 TYPE	NavigationRailUI	CLASS	extends BasicTabbedPaneUI
-FIELD	NavigationRailUI	{static} -RAIL_WIDTH: int
 FIELD	NavigationRailUI	{static} -ITEM_HEIGHT: int
-FIELD	NavigationRailUI	{static} -INDICATOR: int
+FIELD	NavigationRailUI	{static} -GROUP_HEADER: int
 FIELD	NavigationRailUI	{static} -TOP_SPACE: int
+FIELD	NavigationRailUI	{static} -INDICATOR: int
+FIELD	NavigationRailUI	{static} -ICON_X: int
+FIELD	NavigationRailUI	{static} -TEXT_X: int
+FIELD	NavigationRailUI	{static} -RADIUS: int
+FIELD	NavigationRailUI	{static} -GROUPS: Map<Integer, String>
+FIELD	NavigationRailUI	{static} -ICONS: List<Glyph>
+FIELD	NavigationRailUI	-collapsed: boolean
+FIELD	NavigationRailUI	-indicator: double
+FIELD	NavigationRailUI	-hovered: int
+FIELD	NavigationRailUI	-motion: Motion
+METHOD	NavigationRailUI	+setCollapsed(value: boolean): void
+METHOD	NavigationRailUI	+isCollapsed(): boolean
+METHOD	NavigationRailUI	+width(): int
 METHOD	NavigationRailUI	#installDefaults(): void
+METHOD	NavigationRailUI	#installListeners(): void
 METHOD	NavigationRailUI	#calculateTabWidth(placement: int, index: int, metrics: FontMetrics): int
 METHOD	NavigationRailUI	#calculateTabHeight(placement: int, index: int, fontHeight: int): int
-METHOD	NavigationRailUI	#paintTabArea(g: Graphics, placement: int, selectedIndex: int): void
-METHOD	NavigationRailUI	#paintTabBackground(g: Graphics, placement: int, index: int, x: int, y: int, w: int, h: int, selected: boolean): void
-METHOD	NavigationRailUI	#paintText(g: Graphics, placement: int, font: Font, metrics: FontMetrics, index: int, title: String, textRect: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	#paintTabArea(graphics: Graphics, placement: int, selectedIndex: int): void
+METHOD	NavigationRailUI	-paintIndicator(graphics: Graphics, selectedIndex: int): void
+METHOD	NavigationRailUI	#paintTabBackground(graphics: Graphics, placement: int, index: int, x: int, y: int, w: int, h: int, selected: boolean): void
+METHOD	NavigationRailUI	#paintText(graphics: Graphics, placement: int, font: Font, metrics: FontMetrics, index: int, title: String, textRect: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	-paintTitle(g: Graphics2D, index: int, title: String, item: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	-paintGroupCaption(g: Graphics2D, index: int): void
+METHOD	NavigationRailUI	-iconX(): int
+METHOD	NavigationRailUI	-itemBounds(index: int): Rectangle
+METHOD	NavigationRailUI	-moveIndicator(selectedIndex: int): void
+METHOD	NavigationRailUI	-setHovered(index: int): void
 METHOD	NavigationRailUI	#paintTabBorder(g: Graphics, placement: int, index: int, x: int, y: int, w: int, h: int, selected: boolean): void
-METHOD	NavigationRailUI	#paintFocusIndicator(g: Graphics, placement: int, rects: Rectangle[], index: int, iconRect: Rectangle, textRect: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	#paintFocusIndicator(graphics: Graphics, placement: int, bounds: Rectangle[], index: int, iconRect: Rectangle, textRect: Rectangle, selected: boolean): void
 METHOD	NavigationRailUI	#paintContentBorder(g: Graphics, placement: int, selectedIndex: int): void
-TYPE	OverviewPane	CLASS	extends JPanel
+TYPE	OverviewPane	CLASS	extends JPanel, implements Themed
 FIELD	OverviewPane	{static} -HERO_WIDTH: int
-FIELD	OverviewPane	{static} -HEADLINE_HEIGHT: int
-FIELD	OverviewPane	{static} -TEXT_WIDTH: int
-FIELD	OverviewPane	-area: JLabel
-FIELD	OverviewPane	-index: JLabel
-FIELD	OverviewPane	-category: JLabel
-FIELD	OverviewPane	-provenance: JLabel
-FIELD	OverviewPane	-scale: AqiScale
-FIELD	OverviewPane	-pm25: JLabel
-FIELD	OverviewPane	-pm10: JLabel
-FIELD	OverviewPane	-no2: JLabel
-FIELD	OverviewPane	-o3: JLabel
-FIELD	OverviewPane	-adviceTitle: JLabel
-FIELD	OverviewPane	-adviceText: JLabel
-FIELD	OverviewPane	-park: JLabel
-FIELD	OverviewPane	-hero: JPanel
+FIELD	OverviewPane	{static} -HERO_HEIGHT: int
+FIELD	OverviewPane	{static} -DIAL_WIDTH: int
+FIELD	OverviewPane	-dial: AqiDial
+FIELD	OverviewPane	-scale: BandScale
+FIELD	OverviewPane	-area: AuroraLabel
+FIELD	OverviewPane	-index: AuroraLabel
+FIELD	OverviewPane	-category: AuroraLabel
+FIELD	OverviewPane	-provenance: AuroraLabel
+FIELD	OverviewPane	-tiles: Map<GuidelineLevel, MetricTile>
+FIELD	OverviewPane	-insights: InsightList
 FIELD	OverviewPane	-strip: DistrictStrip
-METHOD	OverviewPane	~OverviewPane(details: JTextArea)
-METHOD	OverviewPane	~onDistrictChosen(action: java.util.function.Consumer<District>): void
-METHOD	OverviewPane	~renderAll(results: java.util.Map<District, Result>, selected: District): void
-METHOD	OverviewPane	-headline(): JPanel
-METHOD	OverviewPane	-chip(): JComponent
-METHOD	OverviewPane	-pollutants(): JPanel
-METHOD	OverviewPane	-guidance(details: JTextArea): JPanel
-METHOD	OverviewPane	~render(district: District, result: Result, source: String, profile: AdviceProfile): void
-METHOD	OverviewPane	-renderCategory(r: Reading): void
-METHOD	OverviewPane	-renderPollutants(r: Reading): void
-METHOD	OverviewPane	{static} -parkText(district: District): String
-METHOD	OverviewPane	{static} -metric(title: String, value: JLabel): JPanel
-METHOD	OverviewPane	{static} -metricValue(name: String): JLabel
-METHOD	OverviewPane	{static} -wrapped(name: String): JLabel
-METHOD	OverviewPane	{static} -html(body: String): String
-TYPE	ReportsPane	CLASS	extends JPanel
+FIELD	OverviewPane	-park: ParkCard
+FIELD	OverviewPane	-hero: Card
+FIELD	OverviewPane	-modelHour: AuroraLabel
+FIELD	OverviewPane	-received: AuroraLabel
+FIELD	OverviewPane	-guidanceTitle: AuroraLabel
+FIELD	OverviewPane	-guidanceText: Paragraph
+METHOD	OverviewPane	~OverviewPane(provenanceDetails: JTextArea)
+METHOD	OverviewPane	~onDistrictChosen(action: Consumer<District>): void
+METHOD	OverviewPane	~render(state: ViewState): void
+METHOD	OverviewPane	-renderHeadline(state: ViewState, reading: Reading): void
+METHOD	OverviewPane	-provenanceTone(state: ViewState): Tone
+METHOD	OverviewPane	-renderCategory(reading: Reading): void
+METHOD	OverviewPane	-renderTiles(state: ViewState): void
+METHOD	OverviewPane	{static} -guidelineText(reading: Reading, pollutant: GuidelineLevel): String
+METHOD	OverviewPane	-top(): JComponent
+METHOD	OverviewPane	-heroCard(): JComponent
+METHOD	OverviewPane	-times(): JComponent
+METHOD	OverviewPane	{static} -timeRow(caption: String, value: AuroraLabel): JComponent
+METHOD	OverviewPane	-readout(): JComponent
+METHOD	OverviewPane	-dialBlock(): JComponent
+METHOD	OverviewPane	-pollutants(): JComponent
+METHOD	OverviewPane	-tile(pollutant: GuidelineLevel, caption: String, name: String): MetricTile
+METHOD	OverviewPane	-bottom(provenanceDetails: JTextArea): JComponent
+METHOD	OverviewPane	-guidance(): JComponent
+METHOD	OverviewPane	+applyTheme(): void
+TYPE	ParkCard	CLASS	extends Card
+FIELD	ParkCard	{static} -LOGGER: Logger
+FIELD	ParkCard	-name: AuroraLabel
+FIELD	ParkCard	-place: AuroraLabel
+FIELD	ParkCard	-suitability: Badge
+FIELD	ParkCard	-context: Paragraph
+FIELD	ParkCard	-attribution: AuroraLabel
+FIELD	ParkCard	-open: AuroraButton
+FIELD	ParkCard	-source: URI
+METHOD	ParkCard	~ParkCard(name: String)
+METHOD	ParkCard	~render(district: District, reading: Reading): void
+METHOD	ParkCard	-renderSuitability(reading: Reading): void
+METHOD	ParkCard	-header(): JComponent
+METHOD	ParkCard	-body(): JComponent
+METHOD	ParkCard	-footer(): JComponent
+METHOD	ParkCard	-openSource(): void
+METHOD	ParkCard	+applyTheme(): void
+TYPE	PlannerPane	CLASS	extends JPanel, implements Themed
+FIELD	PlannerPane	{static} -VERDICT_HEIGHT: int
+FIELD	PlannerPane	{static} -COMPARISON_HEIGHT: int
+FIELD	PlannerPane	{static} -PRECAUTION_WIDTH: int
+FIELD	PlannerPane	-advice: JTextArea
+FIELD	PlannerPane	-intensity: SegmentedControl<ActivityIntensity>
+FIELD	PlannerPane	-window: SegmentedControl<ActivityWindow>
+FIELD	PlannerPane	-verdictLabel: AuroraLabel
+FIELD	PlannerPane	-verdictBadge: Badge
+FIELD	PlannerPane	-verdictReason: Paragraph
+FIELD	PlannerPane	-precautions: JPanel
+FIELD	PlannerPane	-strategyCards: Map<AdviceProfile, Card>
+FIELD	PlannerPane	-strategyText: Map<AdviceProfile, Paragraph>
+FIELD	PlannerPane	-park: ParkCard
+METHOD	PlannerPane	~PlannerPane(profile: JComboBox<AdviceProfile>, advice: JTextArea)
+METHOD	PlannerPane	~onIntensity(action: Consumer<ActivityIntensity>): void
+METHOD	PlannerPane	~onWindow(action: Consumer<ActivityWindow>): void
+METHOD	PlannerPane	~restore(savedIntensity: ActivityIntensity, savedWindow: ActivityWindow): void
+METHOD	PlannerPane	~render(state: ViewState): void
+METHOD	PlannerPane	-renderPlan(state: ViewState, reading: Reading): void
+METHOD	PlannerPane	-describePlan(state: ViewState, plan: Plan): void
+METHOD	PlannerPane	{static} -verdictTone(verdict: Verdict): Tone
+METHOD	PlannerPane	-renderPrecautions(steps: List<String>): void
+METHOD	PlannerPane	{static} -bullet(step: String): JComponent
+METHOD	PlannerPane	-renderStrategies(state: ViewState, reading: Reading): void
+METHOD	PlannerPane	-controls(profile: JComboBox<AdviceProfile>): JComponent
+METHOD	PlannerPane	{static} -field(caption: String, control: JComponent, note: String): JComponent
+METHOD	PlannerPane	-verdict(): JComponent
+METHOD	PlannerPane	-precautionsCard(): JComponent
+METHOD	PlannerPane	-comparison(): JComponent
+METHOD	PlannerPane	-detail(): JComponent
+METHOD	PlannerPane	{static} -detailText(state: ViewState): String
+METHOD	PlannerPane	{static} ~areas(): List<District>
+METHOD	PlannerPane	+applyTheme(): void
+TYPE	ReportsPane	CLASS	extends JPanel, implements Themed
 FIELD	ReportsPane	{static} ~ALL_AREAS: String
 FIELD	ReportsPane	{static} -FORM_WIDTH: int
-FIELD	ReportsPane	{static} -DISTRICT_COLUMN: int
 FIELD	ReportsPane	{static} -DESCRIPTION_ROWS: int
+FIELD	ReportsPane	{static} -DISTRICT_COLUMN: int
 FIELD	ReportsPane	{static} -WIDTHS: int[]
-FIELD	ReportsPane	-district: JComboBox<District>
-FIELD	ReportsPane	-issue: JComboBox<Issue>
-FIELD	ReportsPane	-description: JTextArea
-FIELD	ReportsPane	-counter: JLabel
-FIELD	ReportsPane	-save: JButton
-FIELD	ReportsPane	-filter: JComboBox<Object>
-FIELD	ReportsPane	-total: JLabel
+FIELD	ReportsPane	-district: Dropdown<District>
+FIELD	ReportsPane	-issue: Dropdown<Issue>
+FIELD	ReportsPane	-description: TextArea
+FIELD	ReportsPane	-counter: AuroraLabel
+FIELD	ReportsPane	-save: AuroraButton
+FIELD	ReportsPane	-filter: Dropdown<Object>
+FIELD	ReportsPane	-total: AuroraLabel
 FIELD	ReportsPane	-model: DefaultTableModel
-FIELD	ReportsPane	-table: JTable
+FIELD	ReportsPane	-table: DataTable
 FIELD	ReportsPane	-sorter: TableRowSorter<DefaultTableModel>
+FIELD	ReportsPane	-historyLayout: CardLayout
+FIELD	ReportsPane	-historyBody: JPanel
 METHOD	ReportsPane	~ReportsPane()
-METHOD	ReportsPane	-form(): JPanel
-METHOD	ReportsPane	-descriptionField(): JComponent
-METHOD	ReportsPane	-actions(): JPanel
-METHOD	ReportsPane	-history(): JPanel
+METHOD	ReportsPane	{static} -filterOptions(): Object[]
+METHOD	ReportsPane	-form(): JComponent
+METHOD	ReportsPane	-fields(): JComponent
+METHOD	ReportsPane	-countWhileTyping(): void
+METHOD	ReportsPane	-actions(): JComponent
+METHOD	ReportsPane	-history(): JComponent
 METHOD	ReportsPane	-applyFilter(): void
 METHOD	ReportsPane	-updateTotal(): void
 METHOD	ReportsPane	-updateCount(): void
 METHOD	ReportsPane	~render(entries: List<CitizenReport>): void
 METHOD	ReportsPane	~setSaving(value: boolean): void
+METHOD	ReportsPane	~setInvalid(value: boolean): void
 METHOD	ReportsPane	~onSave(action: Runnable): void
 METHOD	ReportsPane	~selectDistrict(value: District): void
 METHOD	ReportsPane	~clearDescription(): void
 METHOD	ReportsPane	~district(): District
 METHOD	ReportsPane	~issue(): Issue
 METHOD	ReportsPane	~description(): String
-TYPE	Theme	CLASS	
-FIELD	Theme	{static} ~CANVAS: Color
-FIELD	Theme	{static} ~SURFACE: Color
-FIELD	Theme	{static} ~RAIL: Color
-FIELD	Theme	{static} ~RAIL_SELECTED: Color
-FIELD	Theme	{static} ~TEXT: Color
-FIELD	Theme	{static} ~MUTED: Color
-FIELD	Theme	{static} ~TEAL: Color
-FIELD	Theme	{static} ~TEAL_DARK: Color
-FIELD	Theme	{static} ~LINE: Color
-FIELD	Theme	{static} ~PALE: Color
-FIELD	Theme	{static} ~ERROR_TEXT: Color
-FIELD	Theme	{static} ~ERROR_FILL: Color
-FIELD	Theme	{static} ~AMBER: Color
-FIELD	Theme	{static} ~AMBER_FILL: Color
-FIELD	Theme	{static} ~ON_DARK: Color
-FIELD	Theme	{static} ~GAP: int
-FIELD	Theme	{static} ~PAD: int
-FIELD	Theme	{static} ~SMALL: int
-FIELD	Theme	{static} ~BODY: int
-FIELD	Theme	{static} ~HEADING: int
-FIELD	Theme	{static} ~TITLE: int
-FIELD	Theme	{static} ~HERO: int
-FIELD	Theme	{static} ~ROW: int
-FIELD	Theme	{static} -FONT: String
-METHOD	Theme	-Theme()
-METHOD	Theme	{static} -pickFont(preferred: String[]): String
-METHOD	Theme	{static} ~font(size: int, style: int): Font
-METHOD	Theme	{static} ~label(text: String, size: int, style: int, foreground: Color): JLabel
-METHOD	Theme	{static} ~caption(text: String): JLabel
-METHOD	Theme	{static} ~panel(layout: LayoutManager): JPanel
-METHOD	Theme	{static} ~card(layout: LayoutManager): JPanel
-METHOD	Theme	{static} ~accentBorder(accent: Color): Border
-METHOD	Theme	{static} ~cardBorder(line: Color): Border
-METHOD	Theme	{static} ~titled(title: String, content: JComponent): JPanel
-METHOD	Theme	{static} ~scroll(content: Component): JScrollPane
-METHOD	Theme	{static} ~styleButton(button: AbstractButton, primary: boolean): void
-METHOD	Theme	{static} ~styleCombo(combo: JComboBox<T>): void
-METHOD	Theme	{static} ~screen(title: String, subtitle: String, content: JComponent): JPanel
-METHOD	Theme	{static} ~text(name: String): JTextArea
-METHOD	Theme	{static} ~named(control: T, name: String): T
-METHOD	Theme	{static} ~styleTable(table: JTable): void
-TYPE	TrendChart	CLASS	extends JPanel
-FIELD	TrendChart	{static} -LEFT: int
-FIELD	TrendChart	{static} -RIGHT: int
-FIELD	TrendChart	{static} -TOP: int
-FIELD	TrendChart	{static} -BOTTOM: int
-FIELD	TrendChart	{static} -POINT: int
-FIELD	TrendChart	{static} -MINIMUM_SCALE: double
-FIELD	TrendChart	{static} -TINT: double
-FIELD	TrendChart	{static} -DASH_PATTERN: float[]
-FIELD	TrendChart	-samples: List<Reading>
-FIELD	TrendChart	-threshold: int
-METHOD	TrendChart	~TrendChart()
-METHOD	TrendChart	~setHistory(district: District, history: List<Reading>, alertThreshold: int): void
-METHOD	TrendChart	#paintComponent(graphics: Graphics): void
-METHOD	TrendChart	-plot(g: Graphics2D, width: int, height: int): void
-METHOD	TrendChart	-bands(g: Graphics2D, width: int, height: int, max: double): void
-METHOD	TrendChart	-axes(g: Graphics2D, w: int, h: int, max: double): void
-METHOD	TrendChart	-thresholdLine(g: Graphics2D, width: int, height: int, max: double): void
-METHOD	TrendChart	-series(g: Graphics2D, width: int, height: int, max: double): void
-METHOD	TrendChart	-timeAxis(g: Graphics2D, start: Instant, end: Instant, width: int, height: int): void
-METHOD	TrendChart	{static} -x(time: Instant, start: Instant, end: Instant, width: int): int
-METHOD	TrendChart	{static} -y(aqi: double, height: int, max: double): int
-METHOD	TrendChart	{static} -tint(colour: Color): Color
-METHOD	TrendChart	{static} -mix(channel: int): int
+METHOD	ReportsPane	+applyTheme(): void
+TYPE	SettingsPane	CLASS	extends JPanel, implements Themed
+FIELD	SettingsPane	{static} -PREVIEW_WIDTH: int
+FIELD	SettingsPane	{static} -PREVIEW_HEIGHT: int
+FIELD	SettingsPane	-theme: SegmentedControl<AuroraTheme>
+FIELD	SettingsPane	-reducedMotion: ToggleSwitch
+FIELD	SettingsPane	-collapsedRail: ToggleSwitch
+FIELD	SettingsPane	-storage: AuroraLabel
+METHOD	SettingsPane	~SettingsPane()
+METHOD	SettingsPane	~onTheme(action: Consumer<AuroraTheme>): void
+METHOD	SettingsPane	~onReducedMotion(action: Consumer<Boolean>): void
+METHOD	SettingsPane	~onRailCollapsed(action: Consumer<Boolean>): void
+METHOD	SettingsPane	~restore(savedTheme: AuroraTheme, motionReduced: boolean, railCollapsed: boolean, dataFolder: Path): void
+METHOD	SettingsPane	-appearance(): JComponent
+METHOD	SettingsPane	-preview(option: AuroraTheme): JComponent
+METHOD	SettingsPane	-motion(): JComponent
+METHOD	SettingsPane	-data(): JComponent
+METHOD	SettingsPane	+applyTheme(): void
+TYPE	SettingsPane.ThemePreview	CLASS	extends AuroraComponent
+FIELD	SettingsPane.ThemePreview	-option: AuroraTheme
+METHOD	SettingsPane.ThemePreview	~ThemePreview(option: AuroraTheme)
+METHOD	SettingsPane.ThemePreview	#paintComponent(graphics: Graphics): void
+METHOD	SettingsPane.ThemePreview	-paintContent(g: Graphics2D): void
+TYPE	StatusBar	CLASS	extends JPanel, implements Themed
+FIELD	StatusBar	{static} -SPINNER: int
+FIELD	StatusBar	-status: AuroraLabel
+FIELD	StatusBar	-banner: AlertBanner
+FIELD	StatusBar	-progress: ProgressDot
+METHOD	StatusBar	~StatusBar()
+METHOD	StatusBar	~message(text: String, error: boolean): void
+METHOD	StatusBar	~setBusy(busy: boolean): void
+METHOD	StatusBar	~showAlert(alert: AlertMonitor.Alert): void
+METHOD	StatusBar	~statusLabel(): AuroraLabel
+METHOD	StatusBar	+applyTheme(): void
+METHOD	StatusBar	#paintComponent(graphics: Graphics): void
+TYPE	StatusBar.AlertBanner	CLASS	extends AuroraComponent
+FIELD	StatusBar.AlertBanner	-text: AuroraLabel
+FIELD	StatusBar.AlertBanner	-active: boolean
+FIELD	StatusBar.AlertBanner	-entrance: double
+METHOD	StatusBar.AlertBanner	~AlertBanner()
+METHOD	StatusBar.AlertBanner	~show(alert: AlertMonitor.Alert): void
+METHOD	StatusBar.AlertBanner	#paintComponent(graphics: Graphics): void
+TYPE	StatusBar.ProgressDot	CLASS	extends AuroraComponent
+FIELD	StatusBar.ProgressDot	-angle: double
+FIELD	StatusBar.ProgressDot	-busy: boolean
+FIELD	StatusBar.ProgressDot	-motion: Motion
+METHOD	StatusBar.ProgressDot	~ProgressDot()
+METHOD	StatusBar.ProgressDot	~setBusy(value: boolean): void
+METHOD	StatusBar.ProgressDot	#paintComponent(graphics: Graphics): void
+TYPE	TopBar	CLASS	extends JPanel, implements Themed
+FIELD	TopBar	-district: Dropdown<District>
+FIELD	TopBar	-refresh: AuroraButton
+FIELD	TopBar	-refreshAll: AuroraButton
+FIELD	TopBar	-themeToggle: IconButton
+FIELD	TopBar	-railToggle: IconButton
+FIELD	TopBar	-state: Badge
+FIELD	TopBar	-updated: AuroraLabel
+METHOD	TopBar	~TopBar()
+METHOD	TopBar	~districtSelector(): Dropdown<District>
+METHOD	TopBar	~refreshButton(): AuroraButton
+METHOD	TopBar	~compareButton(): AuroraButton
+METHOD	TopBar	~themeButton(): IconButton
+METHOD	TopBar	~railButton(): IconButton
+METHOD	TopBar	~showTheme(active: AuroraTheme): void
+METHOD	TopBar	~showRail(collapsed: boolean): void
+METHOD	TopBar	~showState(label: String, tone: Tone, lastSuccess: Instant, now: Instant): void
+METHOD	TopBar	-brand(): JComponent
+METHOD	TopBar	-centre(): JComponent
+METHOD	TopBar	-actions(): JComponent
+METHOD	TopBar	+applyTheme(): void
+METHOD	TopBar	#paintComponent(graphics: Graphics): void
 TYPE	ViewPreferences	CLASS	
 FIELD	ViewPreferences	{static} -DISTRICT: String
 FIELD	ViewPreferences	{static} -PROFILE: String
 FIELD	ViewPreferences	{static} -THRESHOLD: String
 FIELD	ViewPreferences	{static} -ALERT: String
+FIELD	ViewPreferences	{static} -THEME: String
+FIELD	ViewPreferences	{static} -MOTION: String
+FIELD	ViewPreferences	{static} -RAIL: String
+FIELD	ViewPreferences	{static} -INTENSITY: String
+FIELD	ViewPreferences	{static} -WINDOW: String
 FIELD	ViewPreferences	-store: Preferences
-METHOD	ViewPreferences	~ViewPreferences(store: Preferences)
-METHOD	ViewPreferences	~district(): District
-METHOD	ViewPreferences	~profile(): AdviceProfile
-METHOD	ViewPreferences	~subscribed(item: District): boolean
-METHOD	ViewPreferences	~threshold(): int
-METHOD	ViewPreferences	~saveDistrict(value: District): void
-METHOD	ViewPreferences	~saveProfile(value: AdviceProfile): void
-METHOD	ViewPreferences	~saveSubscription(item: District, enabled: boolean): void
-METHOD	ViewPreferences	~saveThreshold(value: int): void
+METHOD	ViewPreferences	+ViewPreferences(store: Preferences)
+METHOD	ViewPreferences	+district(): District
+METHOD	ViewPreferences	+profile(): AdviceProfile
+METHOD	ViewPreferences	+theme(): AuroraTheme
+METHOD	ViewPreferences	+reducedMotion(): boolean
+METHOD	ViewPreferences	+railCollapsed(): boolean
+METHOD	ViewPreferences	+intensity(): ActivityIntensity
+METHOD	ViewPreferences	+window(): ActivityWindow
+METHOD	ViewPreferences	+subscribed(item: District): boolean
+METHOD	ViewPreferences	+threshold(): int
+METHOD	ViewPreferences	+saveDistrict(value: District): void
+METHOD	ViewPreferences	+saveProfile(value: AdviceProfile): void
+METHOD	ViewPreferences	+saveTheme(value: AuroraTheme): void
+METHOD	ViewPreferences	+saveReducedMotion(value: boolean): void
+METHOD	ViewPreferences	+saveRailCollapsed(value: boolean): void
+METHOD	ViewPreferences	+saveIntensity(value: ActivityIntensity): void
+METHOD	ViewPreferences	+saveWindow(value: ActivityWindow): void
+METHOD	ViewPreferences	+saveSubscription(item: District, enabled: boolean): void
+METHOD	ViewPreferences	+saveThreshold(value: int): void
 METHOD	ViewPreferences	-saved(type: Class<E>, key: String, fallback: E): E
+TYPE	ViewState	RECORD	
+FIELD	ViewState	-district: District
+FIELD	ViewState	-result: Result
+FIELD	ViewState	-source: String
+FIELD	ViewState	-profile: AdviceProfile
+FIELD	ViewState	-intensity: ActivityIntensity
+FIELD	ViewState	-window: ActivityWindow
+FIELD	ViewState	-threshold: int
+FIELD	ViewState	-history: List<Reading>
+FIELD	ViewState	-results: Map<District, Result>
+FIELD	ViewState	-now: Instant
+FIELD	ViewState	-fixture: boolean
+METHOD	ViewState	+ViewState(district: District, result: Result, source: String, profile: AdviceProfile, intensity: ActivityIntensity, window: ActivityWindow, threshold: int, history: List<Reading>, results: Map<District, Result>, now: Instant, fixture: boolean)
+METHOD	ViewState	+reading(): Reading
+METHOD	ViewState	+hasReading(): boolean
+METHOD	ViewState	+readings(): Map<District, Reading>
+METHOD	ViewState	+indices(): Map<District, Integer>
