@@ -101,7 +101,7 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
         brand.setPreferredSize(new Dimension(RAIL_WIDTH, 0));
         brand.setBorder(new EmptyBorder(GAP, PAD, GAP, PAD));
         brand.add(label("KL Air & Parks", HEADING + 2, Font.BOLD, Color.WHITE));
-        brand.add(label("Kuala Lumpur pilot · SDG 11", SMALL, Font.PLAIN, ON_DARK));
+        brand.add(label("SDG 11 pilot", SMALL, Font.PLAIN, ON_DARK));
         return brand;
     }
 
