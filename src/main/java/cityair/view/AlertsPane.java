@@ -58,7 +58,7 @@ final class AlertsPane extends JPanel {
         spinner.add(threshold);
         var body = panel(new BorderLayout(0, GAP));
         body.add(spinner, BorderLayout.NORTH);
-        body.add(label("<html><body style='width:230px'>An alert fires when a fresh model hour reaches this U.S. AQI "
+        body.add(label("<html><body style='width:195px'>An alert fires when a fresh model hour reaches this U.S. AQI "
                 + "after being below it. 101 is the start of <i>Unhealthy for sensitive groups</i>. "
                 + "The setting is saved on this device.</body></html>", SMALL, Font.PLAIN, MUTED), BorderLayout.CENTER);
         var card = titled("Alert threshold (U.S. AQI)", body);

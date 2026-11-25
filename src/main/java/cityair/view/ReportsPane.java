@@ -71,7 +71,7 @@ final class ReportsPane extends JPanel {
     private JPanel actions() {
         var bar = panel(new BorderLayout(GAP, 6));
         bar.add(counter, BorderLayout.NORTH);
-        bar.add(label("<html><body style='width:300px'>Saved on this device only and never sent to an authority. Avoid personal details.</body></html>",
+        bar.add(label("<html><body style='width:250px'>Saved on this device only and never sent to an authority. Avoid personal details.</body></html>",
                 SMALL, Font.PLAIN, MUTED), BorderLayout.CENTER);
         styleButton(save, true);
         bar.add(save, BorderLayout.SOUTH);
