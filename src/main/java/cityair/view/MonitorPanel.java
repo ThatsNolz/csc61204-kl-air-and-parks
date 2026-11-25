@@ -1,177 +1,264 @@
 package cityair.view;
 
 import cityair.controller.MonitorController;
+import cityair.model.ActivityIntensity;
+import cityair.model.ActivityWindow;
 import cityair.model.CitizenReport;
 import cityair.model.District;
 import cityair.model.Reading;
 import cityair.observer.AlertMonitor;
 import cityair.service.ReadingService;
 import cityair.strategy.AdviceProfile;
-import java.awt.*;
-import java.awt.event.ActionEvent;
+import cityair.view.component.Atmosphere;
+import cityair.view.component.Panels;
+import cityair.view.component.ScrollableColumn;
+import cityair.view.component.Scrolls;
+import cityair.view.component.Text;
+import cityair.view.design.AuroraTheme;
+import cityair.view.design.Metrics;
+import cityair.view.design.Skin;
+import cityair.view.design.Tone;
+import cityair.view.design.Type;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.prefs.Preferences;
-import javax.swing.*;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.MatteBorder;
-import static cityair.view.Theme.*;
 
 /**
- * Application shell and the Swing implementation of {@link MonitorController.View}. It owns the
- * shared controls and session state and delegates each screen's layout to a dedicated pane.
- * Construct and update on the event dispatch thread.
+ * The application shell and the Swing implementation of {@link MonitorController.View}.
+ *
+ * <p>It owns the controls that are shared between screens, the session state, and nothing else.
+ * Each screen is a separate pane that receives one immutable {@link ViewState} and renders it, so
+ * the shell contains no air-quality logic and a screen contains no state. Everything here runs on
+ * the event dispatch thread; the controller is responsible for keeping work off it.</p>
  */
-public final class MonitorPanel extends JPanel implements MonitorController.View {
-    private static final int WINDOW_WIDTH = 1240, WINDOW_HEIGHT = 820, RAIL_WIDTH = 196, TAB_KEY_BASE = KeyEvent.VK_1;
+public final class MonitorPanel extends Atmosphere implements MonitorController.View {
+    private static final int TAB_KEY_BASE = KeyEvent.VK_1;
     private static final String NO_DATA = "No verified data loaded. Use Refresh district.";
     private static final String SAVED = "Report saved on this device.";
-    private final JTabbedPane tabs = named(new JTabbedPane(JTabbedPane.LEFT), "tabs");
-    private final JComboBox<District> district = named(new JComboBox<>(District.values()), "district");
-    private final JComboBox<AdviceProfile> profile = named(new JComboBox<>(AdviceProfile.values()), "profile");
-    private final JButton refresh = named(new JButton("Refresh district"), "refresh");
-    private final JButton refreshAll = named(new JButton("Compare all areas"), "refreshAll");
-    private final JTextArea dashboard = text("dashboard"), advice = text("advice");
-    private final JLabel status = named(label("Ready. Choose a district to start.", BODY, Font.PLAIN, TEXT), "status");
-    private final JLabel latestAlert = named(label("No notifications delivered in this session.", BODY, Font.PLAIN, MUTED), "latestAlert");
-    private final JProgressBar progress = new JProgressBar();
-    private final OverviewPane overview = new OverviewPane(dashboard);
+    private final JTabbedPane tabs = Text.named(new JTabbedPane(JTabbedPane.LEFT), "tabs");
+    private final NavigationRailUI rail = new NavigationRailUI();
+    private final TopBar topBar = new TopBar();
+    private final StatusBar statusBar = new StatusBar();
+    private final JTextArea provenance = provenanceArea();
+    private final JTextArea adviceDetail = Text.named(detailArea(), "advice");
+    private final cityair.view.component.Dropdown<AdviceProfile> profile =
+            Text.named(new cityair.view.component.Dropdown<>(AdviceProfile.values()), "profile");
+    private final OverviewPane overview = new OverviewPane(provenance);
     private final MonitoringPane monitoring = new MonitoringPane();
-    private final AdvicePane advicePane = new AdvicePane(profile, advice);
+    private final PlannerPane planner;
     private final ReportsPane reportsPane = new ReportsPane();
     private final AlertsPane alertsPane = new AlertsPane();
+    private final SettingsPane settingsPane = new SettingsPane();
     private final Map<District, ReadingService.Result> results = new EnumMap<>(District.class);
     private final Map<District, List<Reading>> trends = new EnumMap<>(District.class);
     private final ViewPreferences settings;
+    private final transient Clock clock;
     private final boolean fixture;
-    private MonitorController controller;
+    private transient Instant lastSuccess;
+    private transient MonitorController controller;
 
     /** Creates a window-sized panel with an injected settings store. */
     public MonitorPanel(Preferences preferences) {
-        this(preferences, false);
+        this(preferences, false, Clock.systemUTC());
     }
 
-    /** Creates a view with explicit test-fixture provenance when running controlled demonstrations. */
+    /** Creates a view with explicit test-fixture provenance, for controlled demonstrations. */
     public MonitorPanel(Preferences preferences, boolean fixture) {
+        this(preferences, fixture, Clock.systemUTC());
+    }
+
+    /** Creates a view with an injected clock, so elapsed-time text can be tested. */
+    public MonitorPanel(Preferences preferences, boolean fixture, Clock clock) {
         super(new BorderLayout());
         this.settings = new ViewPreferences(preferences);
         this.fixture = fixture;
-        setBackground(CANVAS);
-        setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
-        add(header(), BorderLayout.NORTH);
-        add(tabs, BorderLayout.CENTER);
-        add(statusBar(), BorderLayout.SOUTH);
-        addScreens();
-        shortcuts();
+        this.clock = clock;
+        this.planner = new PlannerPane(profile, adviceDetail);
+        Skin.setTheme(settings.theme());
+        Skin.setReducedMotion(settings.reducedMotion());
+        assemble();
         restoreSettings();
         renderSelection();
+        // Fields are constructed before the saved theme is known, so every component that stores
+        // a colour re-reads it once the shell is assembled.
+        Skin.refresh(this);
+        javax.swing.SwingUtilities.invokeLater(this::scrollToTop);
     }
 
-    /** Connects the view's actions after the controller is constructed. */
+    private void assemble() {
+        setPreferredSize(new Dimension(Metrics.WINDOW_WIDTH, Metrics.WINDOW_HEIGHT));
+        setMinimumSize(new Dimension(Metrics.MIN_WINDOW_WIDTH, Metrics.MIN_WINDOW_HEIGHT));
+        add(topBar, BorderLayout.NORTH);
+        add(tabs, BorderLayout.CENTER);
+        add(statusBar, BorderLayout.SOUTH);
+        addScreens();
+        shortcuts();
+        responsiveRail();
+    }
+
+    /** Connects the view's actions once the controller exists. */
     public void bind(MonitorController controller) {
         this.controller = controller;
-        refresh.addActionListener(e -> controller.refresh(selectedDistrict()));
-        refreshAll.addActionListener(e -> controller.refreshAll());
-        reportsPane.onSave(() -> controller.saveReport(reportsPane.district(), reportsPane.issue(), reportsPane.description()));
-        district.addActionListener(e -> changeDistrict());
-        overview.onDistrictChosen(district::setSelectedItem);
-        profile.addActionListener(e -> changeProfile());
-        alertsPane.onSubscription(this::changeSubscription);
-        alertsPane.onThreshold(this::changeThreshold);
+        topBar.refreshButton().addActionListener(event -> controller.refresh(selectedDistrict()));
+        topBar.compareButton().addActionListener(event -> controller.refreshAll());
+        topBar.districtSelector().addActionListener(event -> changeDistrict());
+        topBar.themeButton().addActionListener(event -> toggleTheme());
+        topBar.railButton().addActionListener(event -> setRailCollapsed(!rail.isCollapsed()));
+        reportsPane.onSave(() -> controller.saveReport(reportsPane.district(), reportsPane.issue(),
+                reportsPane.description()));
+        overview.onDistrictChosen(this::selectDistrict);
+        monitoring.onDistrictChosen(this::selectDistrict);
+        profile.addActionListener(event -> changeProfile());
+        bindSettings(controller);
         controller.changeThreshold(settings.threshold());
-        for (District item : District.values()) controller.subscribe(item, settings.subscribed(item));
+        for (District area : District.values()) controller.subscribe(area, settings.subscribed(area));
         controller.loadReports();
     }
 
-    private JPanel header() {
-        var header = new JPanel(new BorderLayout());
-        header.setBackground(SURFACE);
-        header.setBorder(new MatteBorder(0, 0, 1, 0, LINE));
-        header.add(brand(), BorderLayout.WEST);
-        header.add(controls(), BorderLayout.CENTER);
-        return header;
+    private void bindSettings(MonitorController controller) {
+        alertsPane.onSubscription(this::changeSubscription);
+        alertsPane.onThreshold(this::changeThreshold);
+        planner.onIntensity(value -> {
+            settings.saveIntensity(value);
+            renderSelection();
+        });
+        planner.onWindow(value -> {
+            settings.saveWindow(value);
+            renderSelection();
+        });
+        settingsPane.onTheme(this::applyTheme);
+        settingsPane.onReducedMotion(this::applyReducedMotion);
+        settingsPane.onRailCollapsed(this::setRailCollapsed);
     }
 
-    private static JPanel brand() {
-        var brand = new JPanel(new GridLayout(0, 1));
-        brand.setBackground(RAIL);
-        brand.setPreferredSize(new Dimension(RAIL_WIDTH, 0));
-        brand.setBorder(new EmptyBorder(GAP, PAD, GAP, PAD));
-        brand.add(label("KL Air & Parks", HEADING + 2, Font.BOLD, Color.WHITE));
-        brand.add(label("SDG 11 pilot", SMALL, Font.PLAIN, ON_DARK));
-        return brand;
-    }
-
-    private JPanel controls() {
-        var bar = panel(new BorderLayout(GAP, 0));
-        bar.setBorder(new EmptyBorder(GAP, PAD, GAP, PAD));
-        var picker = panel(new BorderLayout(GAP, 0));
-        picker.add(caption("Pilot area"), BorderLayout.WEST);
-        styleCombo(district);
-        district.setPreferredSize(new Dimension(260, 36));
-        picker.add(district, BorderLayout.CENTER);
-        var buttons = panel(new GridLayout(1, 2, GAP, 0));
-        styleButton(refreshAll, false);
-        styleButton(refresh, true);
-        buttons.add(refreshAll);
-        buttons.add(refresh);
-        bar.add(picker, BorderLayout.WEST);
-        bar.add(buttons, BorderLayout.EAST);
-        return bar;
-    }
-
-    private JPanel statusBar() {
-        var bar = new JPanel(new BorderLayout(GAP, 0));
-        bar.setBackground(SURFACE);
-        bar.setBorder(BorderFactory.createCompoundBorder(new MatteBorder(1, 0, 0, 0, LINE), new EmptyBorder(8, PAD, 8, PAD)));
-        latestAlert.setOpaque(true);
-        latestAlert.setBackground(SURFACE);
-        latestAlert.setBorder(new EmptyBorder(4, 10, 4, 10));
-        progress.setIndeterminate(true);
-        progress.setVisible(false);
-        progress.getAccessibleContext().setAccessibleName("Refreshing modeled air quality");
-        bar.add(status, BorderLayout.CENTER);
-        var right = panel(new BorderLayout(GAP, 0));
-        right.add(latestAlert, BorderLayout.CENTER);
-        right.add(progress, BorderLayout.EAST);
-        bar.add(right, BorderLayout.EAST);
-        return bar;
+    /** Requests the first reading, so a launched application is not an empty dashboard. */
+    public void loadOnStart() {
+        if (controller != null) controller.refresh(selectedDistrict());
     }
 
     private void addScreens() {
-        tabs.setUI(new NavigationRailUI());
-        tabs.setFont(font(BODY, Font.BOLD));
-        tabs.setBackground(CANVAS);
-        tabs.addTab("Overview", screen("Air quality overview", "Latest verified estimate for the selected pilot area.", overview));
-        tabs.addTab("Monitoring", screen("Monitor and compare", "Nearby areas can share a CAMS grid cell. Compare all areas fills the table.", monitoring));
-        tabs.addTab("Advice & parks", screen("Plan an outing", "Advice for each audience and a verified park for the selected area.", advicePane));
-        tabs.addTab("Citizen reports", screen("Record an observation", "Reports stay on this device and are not submitted to any authority.", reportsPane));
-        tabs.addTab("Alerts & settings", screen("Pollution alerts", "Choose which areas notify you and the U.S. AQI that triggers an alert.", alertsPane));
-        tabs.addTab("Data & impact", screen("Understand the data", "Source, limits and the pilot's connection to SDG 11.", new AboutPane()));
+        tabs.setUI(rail);
+        tabs.setOpaque(false);
+        tabs.setFocusable(true);
+        addMonitoringScreens();
+        addResponseScreens();
+        addReferenceScreens();
         for (int i = 0; i < tabs.getTabCount(); i++) tabs.setMnemonicAt(i, TAB_KEY_BASE + i);
+        // Showing a screen starts it at its heading: without this the focus Swing hands to the
+        // first control inside the screen scrolls the top of the screen out of view.
+        tabs.addChangeListener(event -> javax.swing.SwingUtilities.invokeLater(this::scrollToTop));
+    }
+
+    private void addMonitoringScreens() {
+        addScreen("Overview", "Air quality overview",
+                "The latest verified estimate for the selected pilot area.", overview);
+        addScreen("Live monitoring", "Monitor and compare",
+                "Pilot areas side by side and the model hours collected in this session.", monitoring);
+    }
+
+    private void addResponseScreens() {
+        addScreen("Activity planner", "Plan time outdoors",
+                "Rule-based assessment of a planned activity, and all three advice strategies.", planner);
+        addScreen("Citizen reports", "Record an observation",
+                "Reports stay on this device and are not submitted to any authority.", reportsPane);
+        addScreen("Alert centre", "Pollution alerts",
+                "Choose which areas notify you and the index that triggers a crossing.", alertsPane);
+    }
+
+    private void addReferenceScreens() {
+        addScreen("Data & impact", "Understand the data",
+                "Source, limits, the U.S. AQI scale and the pilot's connection to SDG 11.", new AboutPane());
+        addScreen("Settings", "Appearance and data",
+                "Theme, motion and where this application stores information.", settingsPane);
+    }
+
+    private void addScreen(String tab, String title, String subtitle, JComponent content) {
+        var screen = new ScrollableColumn(new BorderLayout(0, Metrics.SPACE_5));
+        screen.setBorder(new EmptyBorder(Metrics.SPACE_6, Metrics.SPACE_7, Metrics.SPACE_6, Metrics.SPACE_7));
+        var heading = Panels.column(2);
+        heading.add(Text.title(title), BorderLayout.NORTH);
+        heading.add(Text.muted(subtitle), BorderLayout.SOUTH);
+        screen.add(heading, BorderLayout.NORTH);
+        screen.add(content, BorderLayout.CENTER);
+        var scroll = Scrolls.vertical(screen);
+        scroll.setName(tab);
+        tabs.addTab(tab, scroll);
+        // The rail can collapse to icons, so the name and purpose live in the tooltip as well.
+        tabs.setToolTipTextAt(tabs.getTabCount() - 1, tab + " · " + subtitle);
+    }
+
+    private void scrollToTop() {
+        if (tabs.getSelectedComponent() instanceof javax.swing.JScrollPane scroll) {
+            scroll.getVerticalScrollBar().setValue(0);
+        }
     }
 
     private void shortcuts() {
-        var key = KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK);
-        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(key, "refreshSelected");
-        getActionMap().put("refreshSelected", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { refresh.doClick(0); }
+        bind(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK, "refreshSelected",
+                () -> topBar.refreshButton().doClick(0));
+        bind(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK, "refreshAll",
+                () -> topBar.compareButton().doClick(0));
+        bind(KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK, "toggleTheme", this::toggleTheme);
+    }
+
+    private void bind(int key, int modifiers, String name, Runnable action) {
+        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke(key, modifiers), name);
+        getActionMap().put(name, new AbstractAction() {
+            /** Runs the action this control is bound to. */
+            @Override public void actionPerformed(java.awt.event.ActionEvent event) { action.run(); }
+        });
+    }
+
+    private void responsiveRail() {
+        addComponentListener(new ComponentAdapter() {
+            /** Collapses or expands the navigation rail to suit the new width. */
+            @Override public void componentResized(ComponentEvent event) {
+                if (settings.railCollapsed()) return;
+                rail.setCollapsed(getWidth() < Metrics.RAIL_COLLAPSE_WIDTH);
+                topBar.showRail(rail.isCollapsed());
+            }
         });
     }
 
     private void restoreSettings() {
-        district.setSelectedItem(settings.district());
+        topBar.districtSelector().setSelectedItem(settings.district());
         profile.setSelectedItem(settings.profile());
         reportsPane.selectDistrict(selectedDistrict());
         alertsPane.setThreshold(settings.threshold());
-        for (District item : District.values()) alertsPane.setSubscribed(item, settings.subscribed(item));
+        for (District area : District.values()) alertsPane.setSubscribed(area, settings.subscribed(area));
+        planner.restore(settings.intensity(), settings.window());
+        settingsPane.restore(settings.theme(), settings.reducedMotion(), settings.railCollapsed(), dataFolder());
+        rail.setCollapsed(settings.railCollapsed());
+        topBar.showTheme(Skin.theme());
+        topBar.showRail(rail.isCollapsed());
+        alertsPane.render(List.of());
     }
 
-    private District selectedDistrict() { return (District) district.getSelectedItem(); }
+    private static Path dataFolder() {
+        return Path.of(System.getProperty("user.home"), ".kl-air-and-parks");
+    }
+
+    private District selectedDistrict() { return (District) topBar.districtSelector().getSelectedItem(); }
+
     private AdviceProfile selectedProfile() { return (AdviceProfile) profile.getSelectedItem(); }
+
+    private void selectDistrict(District area) { topBar.districtSelector().setSelectedItem(area); }
 
     private void changeDistrict() {
         settings.saveDistrict(selectedDistrict());
@@ -185,25 +272,51 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
         renderSelection();
     }
 
-    private void changeSubscription(District item, boolean enabled) {
-        settings.saveSubscription(item, enabled);
-        controller.subscribe(item, enabled);
-        message((enabled ? "Notifications enabled for " : "Notifications disabled for ") + item + ".", false);
+    private void changeSubscription(District area, boolean enabled) {
+        settings.saveSubscription(area, enabled);
+        controller.subscribe(area, enabled);
+        message((enabled ? "Notifications enabled for " : "Notifications disabled for ") + area + ".", false);
     }
 
     private void changeThreshold(int value) {
         settings.saveThreshold(value);
+        alertsPane.setThreshold(value);
         controller.changeThreshold(value);
         renderSelection();
         message("Alert threshold set to U.S. AQI " + value + ".", false);
     }
 
-    /** Disables refresh and district selection during an active network request. */
+    private void toggleTheme() {
+        applyTheme(Skin.theme() == AuroraTheme.DARK ? AuroraTheme.LIGHT : AuroraTheme.DARK);
+    }
+
+    private void applyTheme(AuroraTheme value) {
+        Skin.setTheme(value);
+        settings.saveTheme(value);
+        settingsPane.restore(value, settings.reducedMotion(), settings.railCollapsed(), dataFolder());
+        topBar.showTheme(value);
+        Skin.refresh(this);
+        message(value + " applied.", false);
+    }
+
+    private void applyReducedMotion(boolean value) {
+        Skin.setReducedMotion(value);
+        settings.saveReducedMotion(value);
+        message(value ? "Motion reduced." : "Motion restored.", false);
+    }
+
+    private void setRailCollapsed(boolean collapsed) {
+        settings.saveRailCollapsed(collapsed);
+        rail.setCollapsed(collapsed);
+        topBar.showRail(collapsed);
+    }
+
+    /** Disables the retrieval actions while a request is in flight. */
     @Override public void loading(boolean value) {
-        refresh.setEnabled(!value);
-        refreshAll.setEnabled(!value);
-        district.setEnabled(!value);
-        progress.setVisible(value);
+        topBar.refreshButton().setLoading(value);
+        topBar.compareButton().setEnabled(!value);
+        topBar.districtSelector().setEnabled(!value);
+        statusBar.setBusy(value);
         if (value) message("Retrieving modeled air quality…", false);
     }
 
@@ -213,60 +326,101 @@ public final class MonitorPanel extends JPanel implements MonitorController.View
         if (value) message("Saving report on this device…", false);
     }
 
-    /** Updates the district result, dashboard, advice and comparison. */
-    @Override public void reading(District item, ReadingService.Result result, List<Reading> recent) {
-        results.put(item, result);
-        trends.put(item, List.copyOf(recent));
+    /** Records a refresh outcome and redraws every screen from it. */
+    @Override public void reading(District area, ReadingService.Result result, List<Reading> recent) {
+        results.put(area, result);
+        trends.put(area, List.copyOf(recent));
+        if (result.state() == ReadingService.State.LIVE) lastSuccess = clock.instant();
         renderSelection();
-        showReadingStatus(item, result);
+        showReadingStatus(area, result);
     }
 
     private void renderSelection() {
-        var result = results.get(selectedDistrict());
-        var source = Formats.source(result, fixture);
-        dashboard.setText(dashboardText(result, source));
-        dashboard.setCaretPosition(0);
-        overview.render(selectedDistrict(), result, source, selectedProfile());
-        overview.renderAll(results, selectedDistrict());
-        monitoring.render(selectedDistrict(), results, trends.getOrDefault(selectedDistrict(), List.of()),
-                r -> Formats.tableSource(r, fixture), settings.threshold());
-        advicePane.render(selectedDistrict(), result, source, selectedProfile());
+        var state = state();
+        provenance.setText(provenanceText(state));
+        overview.render(state);
+        monitoring.render(state);
+        planner.render(state);
+        setCondition(state.hasReading() ? CategoryPalette.fill(state.reading().category()) : null);
+        topBar.showState(Formats.state(state.result(), fixture), stateTone(state.result()), lastSuccess, state.now());
     }
 
-    private String dashboardText(ReadingService.Result result, String source) {
-        if (result == null) return selectedDistrict() + "\n\n" + NO_DATA;
-        if (result.reading() == null) return selectedDistrict() + "\n\nUNAVAILABLE\n" + result.message();
-        var data = result.reading();
-        return "Source: " + source + "\nModel time: " + Formats.time(data.validAt()) + "\nFetched: "
-                + Formats.time(data.fetchedAt()) + "\n\nOpen-Meteo / Copernicus CAMS Global regional model, "
-                + "not Malaysia's official API.";
+    private ViewState state() {
+        var district = selectedDistrict();
+        var result = results.get(district);
+        return new ViewState(district, result, Formats.source(result, fixture), selectedProfile(),
+                settings.intensity(), settings.window(), settings.threshold(),
+                trends.getOrDefault(district, List.of()), results, clock.instant(), fixture);
     }
 
-    private void showReadingStatus(District item, ReadingService.Result result) {
+    private static Tone stateTone(ReadingService.Result result) {
+        if (result == null) return Tone.INK_MUTED;
+        return switch (result.state()) {
+            case LIVE -> Tone.POSITIVE;
+            case CACHED -> Tone.CAUTION;
+            case UNAVAILABLE -> Tone.DANGER;
+        };
+    }
+
+    private String provenanceText(ViewState state) {
+        if (state.result() == null) return state.district() + "\n\n" + NO_DATA;
+        if (state.reading() == null) {
+            return state.district() + "\n\nUNAVAILABLE\n" + state.result().message();
+        }
+        Reading data = state.reading();
+        return "Source: " + state.source() + "\nModel time: " + Formats.time(data.validAt())
+                + "\nFetched: " + Formats.time(data.fetchedAt())
+                + "\n\nOpen-Meteo / Copernicus CAMS Global regional model, not Malaysia's official API.";
+    }
+
+    private void showReadingStatus(District area, ReadingService.Result result) {
         boolean failed = result.state() == ReadingService.State.UNAVAILABLE;
-        var text = fixture && result.state() == ReadingService.State.LIVE ? "Controlled response received." : result.message();
-        message(item + " · " + text, failed);
-        if (result.state() == ReadingService.State.CACHED) status.setForeground(AMBER);
+        String text = fixture && result.state() == ReadingService.State.LIVE
+                ? "Controlled response received." : result.message();
+        message(area + " · " + text, failed);
+        if (result.state() == ReadingService.State.CACHED) {
+            statusBar.statusLabel().setForeground(Skin.color(Tone.CAUTION));
+        }
     }
 
     /** Updates the local report history. */
     @Override public void reports(List<CitizenReport> entries) { reportsPane.render(entries); }
 
-    /** Displays a message using text and contrast rather than colour alone. */
+    /** Displays a message using words, an icon and colour together. */
     @Override public void message(String text, boolean error) {
-        status.setForeground(error ? ERROR_TEXT : TEXT);
-        status.setText((error ? "Notice: " : "") + text);
+        statusBar.message(text, error);
+        reportsPane.setInvalid(error && text.contains(CitizenReport.DESCRIPTION_RANGE));
         if (SAVED.equals(text)) reportsPane.clearDescription();
     }
 
-    /** Displays session crossing history and a banner for a delivered alert. */
+    /** Displays the session crossing history and announces a delivered alert. */
     @Override public void alert(List<AlertMonitor.Alert> history, AlertMonitor.Alert delivered) {
         alertsPane.render(history);
-        if (delivered == null) return;
-        latestAlert.setBackground(ERROR_FILL);
-        latestAlert.setForeground(ERROR_TEXT);
-        latestAlert.setFont(font(BODY, Font.BOLD));
-        latestAlert.setText("Pollution alert for " + delivered.district() + ": U.S. AQI " + delivered.aqi()
-                + " (threshold " + delivered.threshold() + ")");
+        if (delivered != null) statusBar.showAlert(delivered);
     }
+
+    private static JTextArea provenanceArea() {
+        return Text.named(detailArea(), "dashboard");
+    }
+
+    private static JTextArea detailArea() {
+        var field = new JTextArea();
+        field.setEditable(false);
+        field.setLineWrap(true);
+        field.setWrapStyleWord(true);
+        field.setOpaque(false);
+        field.setFont(Type.text(Type.LABEL));
+        field.setForeground(Skin.color(Tone.INK_MUTED));
+        field.setBorder(new EmptyBorder(0, 0, 0, 0));
+        field.setFocusable(false);
+        ((javax.swing.text.DefaultCaret) field.getCaret())
+                .setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);
+        return field;
+    }
+
+    /** The planner's chosen intensity, exposed for the integration tests. */
+    ActivityIntensity intensity() { return settings.intensity(); }
+
+    /** The planner's chosen activity length, exposed for the integration tests. */
+    ActivityWindow window() { return settings.window(); }
 }

@@ -88,7 +88,7 @@ def build():
     parts[[i for i, p in enumerate(parts) if 'height="250"' in p][0]] = parts[[i for i, p in enumerate(parts) if 'height="250"' in p][0]].replace('height="250"', f'height="{y - start + 4}"')
     y += 16
     message("MonitorController", "MonitorPanel", "invokeLater → reading(district, result, history)", TEAL, reply=True)
-    message("MonitorPanel", "MonitorPanel", "render Overview, Monitoring and Advice")
+    message("MonitorPanel", "MonitorPanel", "render Overview, Monitoring and Planner")
     message("MonitorController", "MonitorPanel", "invokeLater → loading(false)", TEAL, reply=True)
     bottom = y + 10
     for name in LIVES:

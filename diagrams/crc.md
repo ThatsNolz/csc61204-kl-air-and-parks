@@ -45,9 +45,24 @@ Class names match the UML class diagrams generated from the source (`diagrams/cl
 ## MonitorPanel
 | Responsibilities | Collaborators |
 |---|---|
-| Implement the View contract on the Swing event dispatch thread; own shared controls and session state; delegate each screen to its pane; persist choices. | MonitorController, OverviewPane, MonitoringPane, AdvicePane, ReportsPane, AlertsPane, ViewPreferences |
+| Implement the View contract on the Swing event dispatch thread; own the top bar, status bar and session state; delegate each screen to its pane; persist choices. | MonitorController, TopBar, StatusBar, OverviewPane, MonitoringPane, PlannerPane, ReportsPane, AlertsPane, SettingsPane, ViewPreferences |
 
 ## MonitoringPane
 | Responsibilities | Collaborators |
 |---|---|
-| Build read-only district and sample rows; colour each category cell; plot distinct model hours against the alert threshold. | TrendChart, CategoryPalette, Reading, Result |
+| Build read-only district and sample rows; colour each category cell; plot distinct model hours against the alert threshold; show the session's trend statistics. | TrendChart, ComparisonBars, AreaPlot, CategoryPalette, TrendSummary, Reading, Result |
+
+## ActivityPlanner
+| Responsibilities | Collaborators |
+|---|---|
+| Score a planned activity from the AQI category, intensity, duration and audience; publish the arithmetic and the precautions behind each verdict rather than only its conclusion. | AirCategory, ActivityIntensity, ActivityWindow, AdviceProfile, PlannerPane |
+
+## PlannerPane
+| Responsibilities | Collaborators |
+|---|---|
+| Collect the activity choices; show the verdict with the score that produced it; run the same reading through all three advice strategies side by side; name one verified nearby park. | ActivityPlanner, AdviceProfile, ParkCard, CityCatalog, Reading |
+
+## InsightEngine
+| Responsibilities | Collaborators |
+|---|---|
+| Turn the current readings into ranked plain-language observations (comparisons between areas, guideline exceedances, data gaps) without deciding how they are displayed. | District, Reading, GuidelineLevel, InsightList |

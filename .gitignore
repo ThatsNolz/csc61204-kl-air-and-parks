@@ -8,3 +8,6 @@
 .idea/
 *.log
 
+
+# Local JDK accidentally unpacked inside the source tree; never part of the build
+/src/main/java/cityair/app/oracleJdk-27/

@@ -218,30 +218,58 @@ def main(tsv, out):
             ["AdviceProfile", "Reading"], ["AdviceStrategy", "District", "CityCatalog"],
             ["GeneralPublicAdvice", "ChildrenAdvice", "OlderAdultsAdvice"], ["AirCategory", "CityCatalog.Park"]]), encoding="utf-8")
 
-    views = ["MonitorPanel", "MonitorController.View", "JPanel", "BasicTabbedPaneUI", "OverviewPane", "MonitoringPane", "AdvicePane",
-             "ReportsPane", "AlertsPane", "AboutPane", "DistrictStrip", "AqiScale", "TrendChart", "ViewPreferences",
+    planner = ["PlannerPane", "ActivityPlanner", "ActivityPlanner.Plan", "ActivityPlanner.Verdict",
+               "ActivityIntensity", "ActivityWindow", "AirCategory", "GuidelineLevel", "Reading"]
+    planner_edges = [
+        ("PlannerPane", "ActivityPlanner", "depend", "plan(...)"),
+        ("ActivityPlanner", "ActivityPlanner.Plan", "depend", "«create»"),
+        ("ActivityPlanner.Plan", "ActivityPlanner.Verdict", "assoc", "verdict", "", "1"),
+        ("ActivityPlanner", "ActivityIntensity", "depend", "scores"),
+        ("ActivityPlanner", "ActivityWindow", "depend", "scores"),
+        ("ActivityPlanner", "AirCategory", "depend", "scores"),
+        ("Reading", "AirCategory", "depend", "category()"),
+        ("Reading", "GuidelineLevel", "assoc", "measured against", "", "0..*"),
+    ]
+    (out / "class-planner.dot").write_text(
+        graph("Activity planning", planner, planner_edges, types, members, consts,
+              compact={"PlannerPane", "Reading", "AirCategory", "GuidelineLevel"}, rankdir="LR", ranks=[
+                  ["ActivityIntensity", "ActivityWindow", "AirCategory"],
+                  ["ActivityPlanner.Plan", "ActivityPlanner.Verdict"]]), encoding="utf-8")
+
+    views = ["MonitorPanel", "MonitorController.View", "Atmosphere", "JPanel", "BasicTabbedPaneUI", "TopBar",
+             "StatusBar", "OverviewPane", "MonitoringPane", "PlannerPane", "ReportsPane", "AlertsPane", "AboutPane",
+             "SettingsPane", "DistrictStrip", "InsightList", "ParkCard", "TrendChart", "ViewPreferences",
              "NavigationRailUI"]
     view_edges = [
         ("MonitorPanel", "MonitorController.View", "realize"),
-        ("MonitorPanel", "JPanel", "extend"),
+        ("MonitorPanel", "Atmosphere", "extend"),
+        ("Atmosphere", "JPanel", "extend"),
+        ("MonitorPanel", "TopBar", "compose", "", "1", "1"),
+        ("MonitorPanel", "StatusBar", "compose", "", "1", "1"),
         ("MonitorPanel", "OverviewPane", "compose", "", "1", "1"),
         ("MonitorPanel", "MonitoringPane", "compose", "", "1", "1"),
-        ("MonitorPanel", "AdvicePane", "compose", "", "1", "1"),
+        ("MonitorPanel", "PlannerPane", "compose", "", "1", "1"),
         ("MonitorPanel", "ReportsPane", "compose", "", "1", "1"),
         ("MonitorPanel", "AlertsPane", "compose", "", "1", "1"),
         ("MonitorPanel", "AboutPane", "compose", "", "1", "1"),
+        ("MonitorPanel", "SettingsPane", "compose", "", "1", "1"),
         ("MonitorPanel", "ViewPreferences", "compose", "settings", "1", "1"),
         ("MonitorPanel", "NavigationRailUI", "depend", "«uses»"),
         ("NavigationRailUI", "BasicTabbedPaneUI", "extend"),
-        ("OverviewPane", "AqiScale", "compose", "", "1", "1"),
         ("OverviewPane", "DistrictStrip", "compose", "", "1", "1"),
+        ("OverviewPane", "InsightList", "compose", "", "1", "1"),
+        ("OverviewPane", "ParkCard", "compose", "", "1", "1"),
+        ("PlannerPane", "ParkCard", "compose", "", "1", "1"),
         ("MonitoringPane", "TrendChart", "compose", "", "1", "1"),
     ]
     compact = set(views)
     (out / "class-view.dot").write_text(
         graph("View layer", views, view_edges, types, members, consts, compact=compact, rankdir="LR", ranks=[
-            ["OverviewPane", "MonitoringPane", "AdvicePane", "ReportsPane", "AlertsPane", "AboutPane"],
-            ["DistrictStrip", "AqiScale", "TrendChart", "ViewPreferences", "NavigationRailUI"]]), encoding="utf-8")
+            ["TopBar", "StatusBar"],
+            ["OverviewPane", "MonitoringPane", "PlannerPane", "ReportsPane", "AlertsPane", "AboutPane",
+             "SettingsPane"],
+            ["DistrictStrip", "InsightList", "ParkCard", "TrendChart", "ViewPreferences", "NavigationRailUI"]]),
+        encoding="utf-8")
 
 
 if __name__ == "__main__":

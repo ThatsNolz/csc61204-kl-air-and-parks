@@ -8,6 +8,7 @@ rectangle "Kuala Lumpur Air & Parks" {
   usecase "Refresh district estimate" as Refresh
   usecase "Compare loaded districts" as Compare
   usecase "Choose an activity profile" as Profile
+  usecase "Plan an outdoor activity" as Plan
   usecase "Find nearby green spaces" as Parks
   usecase "Save and view local reports" as Report
   usecase "Subscribe and view alerts" as Alert
@@ -17,6 +18,7 @@ rectangle "Kuala Lumpur Air & Parks" {
 Resident --> Refresh
 Resident --> Compare
 Resident --> Profile
+Resident --> Plan
 Resident --> Parks
 Resident --> Report
 Resident --> Alert
