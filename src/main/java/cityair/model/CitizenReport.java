@@ -13,8 +13,17 @@ public record CitizenReport(UUID id, District district, Issue issue, String desc
     /** Shared display range, built from the actual validation bounds. */
     public static final String DESCRIPTION_RANGE = MIN_DESCRIPTION + " to " + MAX_DESCRIPTION;
 
-    /** Report categories shown in the form. */
-    public enum Issue { SMOKE, DUST, ODOUR, OTHER }
+    /** Report categories shown in the form. Stored by constant name; the label is for display only. */
+    public enum Issue {
+        SMOKE("Smoke"), DUST("Dust"), ODOUR("Odour"), OTHER("Other");
+
+        private final String label;
+
+        Issue(String label) { this.label = label; }
+
+        /** Returns the display label. */
+        @Override public String toString() { return label; }
+    }
 
     /** Validates and normalizes a resident's input. */
     public CitizenReport {
