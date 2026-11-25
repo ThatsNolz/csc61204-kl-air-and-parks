@@ -11,6 +11,8 @@ rectangle "Kuala Lumpur Air & Parks" {
   usecase "Find nearby green spaces" as Parks
   usecase "Save and view local reports" as Report
   usecase "Subscribe and view alerts" as Alert
+  usecase "Set the alert threshold" as Threshold
+  usecase "Filter reports by area" as Filter
 }
 Resident --> Refresh
 Resident --> Compare
@@ -18,5 +20,7 @@ Resident --> Profile
 Resident --> Parks
 Resident --> Report
 Resident --> Alert
+Resident --> Threshold
+Resident --> Filter
 Provider --> Refresh
 @enduml
