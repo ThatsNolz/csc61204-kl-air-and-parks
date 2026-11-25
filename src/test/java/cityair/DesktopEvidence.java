@@ -39,17 +39,37 @@ public final class DesktopEvidence {
     private MonitorPanel panel;
     private JFrame frame;
 
-    private DesktopEvidence(Path output) throws Exception { this.output = output; }
+    private final boolean fixturesOnly;
 
-    /** Launches real Swing windows and captures five verified integration outcomes. */
+    private DesktopEvidence(Path output, boolean fixturesOnly) throws Exception {
+        this.output = output;
+        this.fixturesOnly = fixturesOnly;
+    }
+
+    /**
+     * Launches real Swing windows and captures verified integration outcomes.
+     * Pass {@code --fixtures-only} after the output folder when the live provider is unreachable.
+     */
     public static void main(String[] args) throws Exception {
-        new DesktopEvidence(Path.of(args[0])).run();
+        new DesktopEvidence(Path.of(args[0]), args.length > 1 && "--fixtures-only".equals(args[1])).run();
     }
 
     private void run() throws Exception {
         Files.createDirectories(output);
         var server = server();
         try {
+            if (!fixturesOnly) liveCases();
+            localCases(server.getAddress().getPort());
+        } finally {
+            close();
+            server.stop(0);
+            worker.shutdownNow();
+            prefs.removeNode();
+        }
+    }
+
+    private void liveCases() throws Exception {
+        {
             open(OpenMeteoClient.ENDPOINT, "Live provider");
             action("refresh");
             waitText("dashboard", "LIVE API");
@@ -64,7 +84,7 @@ public final class DesktopEvidence {
             tab(3);
             onEdt(() -> area("description").setText("Test observation: smoke near a park entrance."));
             action("save");
-            waitText("reportHistory", "Test observation: smoke near a park entrance.");
+            waitCell("reportTable", 0, 3, "Test observation: smoke near a park entrance.");
             shot("IT-01-save-report");
             action("save");
             waitText("status", "10 to 500");
@@ -73,31 +93,26 @@ public final class DesktopEvidence {
             }
             shot("IT-05-invalid-input");
             close();
-            localCases(server.getAddress().getPort());
-        } finally {
-            close();
-            server.stop(0);
-            worker.shutdownNow();
-            prefs.removeNode();
         }
     }
 
     private void localCases(int port) throws Exception {
         open(URI.create("http://127.0.0.1:" + port + "/v1/air-quality"), "TEST HARNESS · local HTTP fixtures");
+        if (fixturesOnly) seedFixtureCache();
         action("refresh");
         waitText("dashboard", "CACHED");
         waitText("status", "500");
         shot("IT-03-http-500-cached");
         response.set(200);
         tab(4);
-        onEdt(() -> ((JCheckBox) find(panel, "subscription")).doClick(0));
+        onEdt(() -> ((JCheckBox) find(panel, "subscription.TITIWANGSA")).doClick(0));
         action("refresh");
         waitText("dashboard", "TEST FIXTURE");
         waitText("aqiValue", "79");
         waitText("latestAlert", "No notifications");
         fixtureAqi.set(115);
         action("refresh");
-        waitText("notifications", "crossed 101");
+        waitCell("alertTable", 0, 2, "115");
         waitText("latestAlert", "Pollution alert");
         shot("IT-04-observer-threshold");
         tab(1);
@@ -106,6 +121,34 @@ public final class DesktopEvidence {
         onEdt(() -> ((JComboBox<?>) find(panel, "profile")).setSelectedItem(AdviceProfile.CHILDREN));
         waitText("advice", "Shorten vigorous outdoor play");
         shot("GUI-advice-and-parks");
+        tab(4);
+        shot("GUI-alerts-and-settings");
+        if (fixturesOnly) localScreens();
+    }
+
+    /** Screens whose evidence does not depend on the provider; captured in the fixture window. */
+    private void localScreens() throws Exception {
+        tab(5);
+        shot("GUI-data-and-impact");
+        tab(3);
+        onEdt(() -> area("description").setText("Test observation: smoke near a park entrance."));
+        action("save");
+        waitCell("reportTable", 0, 3, "Test observation: smoke near a park entrance.");
+        shot("IT-01-save-report");
+        action("save");
+        waitText("status", "10 to 500");
+        if (new ReportStore(temporary).list().size() != 1) throw new AssertionError("A blank input changed the stored report count.");
+        shot("IT-05-invalid-input");
+    }
+
+    /** Without the live run, one controlled 200 response provides the verified cache used by IT-03. */
+    private void seedFixtureCache() throws Exception {
+        response.set(200);
+        action("refresh");
+        waitText("dashboard", "TEST FIXTURE");
+        waitEnabled("refresh");
+        shot("GUI-overview-fixture");
+        response.set(500);
     }
 
     private HttpServer server() throws Exception {
@@ -191,6 +234,20 @@ public final class DesktopEvidence {
                 var c = find(panel, name);
                 String text = c instanceof JLabel label ? label.getText() : ((JTextArea) c).getText();
                 match.set(text.contains(expected));
+            });
+            if (match.get()) return;
+            Thread.sleep(100);
+        }
+        throw new AssertionError(name + " did not show " + expected);
+    }
+
+    private void waitCell(String name, int row, int column, String expected) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(18).toNanos();
+        while (System.nanoTime() < deadline) {
+            var match = new java.util.concurrent.atomic.AtomicBoolean();
+            onEdt(() -> {
+                var table = (JTable) find(panel, name);
+                match.set(table.getRowCount() > row && expected.equals(String.valueOf(table.getValueAt(row, column))));
             });
             if (match.get()) return;
             Thread.sleep(100);

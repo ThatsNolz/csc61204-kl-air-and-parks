@@ -59,7 +59,7 @@ public final class MonitorController {
         this.ui = Objects.requireNonNull(ui);
         this.clock = Objects.requireNonNull(clock);
         this.view = Objects.requireNonNull(view);
-        listener = alert -> ui.execute(() -> view.alert(alerts.history(), alert));
+        listener = new AlertBridge(alerts, ui, view);
     }
 
     /** Schedules retrieval and displays its result on the UI executor. */
@@ -171,6 +171,15 @@ public final class MonitorController {
     private void reportFailure(IOException ex, String message) {
         LOGGER.log(Level.WARNING, message, ex);
         ui.execute(() -> view.message(message, true));
+    }
+
+    /** Applies a new alert threshold, reporting an out-of-range value as a message. */
+    public void changeThreshold(int value) {
+        try {
+            alerts.setThreshold(value);
+        } catch (IllegalArgumentException ex) {
+            view.message(ex.getMessage(), true);
+        }
     }
 
     /** Enables or disables desktop notifications for one district. */

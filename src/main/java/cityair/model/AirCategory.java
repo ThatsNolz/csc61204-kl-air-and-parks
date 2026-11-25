@@ -26,6 +26,9 @@ public enum AirCategory {
         throw new AssertionError("AQI has no category");
     }
 
+    /** Returns the highest index in this category; {@link Integer#MAX_VALUE} for HAZARDOUS. */
+    public int upperBound() { return upperBound; }
+
     /** Returns the display label. */
     @Override public String toString() { return label; }
 }

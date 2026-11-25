@@ -34,6 +34,11 @@ class ControllerTest {
         queue.remove().run();
         assertAll(() -> assertFalse(view.busy), () -> assertEquals(101, view.result.reading().aqi()));
     }
+    @Test void changeThreshold_outOfRange_showsMessageAndKeepsThreshold() {
+        controller(d -> reading(d, 50, 0), Runnable::run).changeThreshold(0);
+        assertAll(() -> assertTrue(view.error), () -> assertTrue(view.message.contains("between 1 and 500")),
+                () -> assertEquals(101, alerts.threshold()));
+    }
     @Test void refresh_unavailableApi_displaysUnavailableWithoutIndex() {
         controller(d -> { throw new ApiFailure(ApiFailure.Kind.SERVER, "Temporary outage.", null); }, Runnable::run)
                 .refresh(TITIWANGSA);

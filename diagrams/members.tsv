@@ -1,0 +1,533 @@
+TYPE	AirQualityGateway	INTERFACE	
+METHOD	AirQualityGateway	{abstract} +fetch(district: District): Reading
+TYPE	ApiFailure	CLASS	extends Exception
+TYPE	ApiFailure.Kind	ENUM	
+FIELD	ApiFailure.Kind	{static} +NOT_FOUND: Kind
+FIELD	ApiFailure.Kind	{static} +SERVER: Kind
+FIELD	ApiFailure.Kind	{static} +RATE_LIMIT: Kind
+FIELD	ApiFailure.Kind	{static} +HTTP: Kind
+FIELD	ApiFailure.Kind	{static} +TIMEOUT: Kind
+FIELD	ApiFailure.Kind	{static} +NETWORK: Kind
+FIELD	ApiFailure.Kind	{static} +INVALID: Kind
+FIELD	ApiFailure	-kind: Kind
+METHOD	ApiFailure	+ApiFailure(kind: Kind, message: String, cause: Throwable)
+METHOD	ApiFailure	+kind(): Kind
+TYPE	OpenMeteoClient	CLASS	implements AirQualityGateway
+FIELD	OpenMeteoClient	{static} +ENDPOINT: URI
+FIELD	OpenMeteoClient	{static} +ZONE: ZoneId
+FIELD	OpenMeteoClient	{static} -OK: int
+FIELD	OpenMeteoClient	{static} -REDIRECT: int
+FIELD	OpenMeteoClient	{static} -NOT_FOUND_STATUS: int
+FIELD	OpenMeteoClient	{static} -RATE_STATUS: int
+FIELD	OpenMeteoClient	{static} -SERVER_STATUS: int
+FIELD	OpenMeteoClient	{static} -FIELDS: String
+FIELD	OpenMeteoClient	-endpoint: URI
+FIELD	OpenMeteoClient	-http: HttpClient
+FIELD	OpenMeteoClient	-json: ObjectMapper
+FIELD	OpenMeteoClient	-timeout: Duration
+FIELD	OpenMeteoClient	-clock: Clock
+METHOD	OpenMeteoClient	+OpenMeteoClient(endpoint: URI, http: HttpClient, timeout: Duration, clock: Clock)
+METHOD	OpenMeteoClient	+fetch(district: District): Reading
+METHOD	OpenMeteoClient	-requestUri(district: District): URI
+METHOD	OpenMeteoClient	{static} -checkStatus(status: int): void
+METHOD	OpenMeteoClient	-parse(district: District, body: String): Reading
+METHOD	OpenMeteoClient	-toReading(district: District, current: JsonNode): Reading
+METHOD	OpenMeteoClient	{static} -pollutant(current: JsonNode, field: String): Double
+TYPE	Main	CLASS	
+FIELD	Main	{static} -CONNECT_TIMEOUT: Duration
+FIELD	Main	{static} -REQUEST_TIMEOUT: Duration
+METHOD	Main	-Main()
+METHOD	Main	{static} +main(args: String[]): void
+METHOD	Main	{static} -client(): OpenMeteoClient
+METHOD	Main	{static} -open(): void
+TYPE	AlertBridge	CLASS	implements PollutionObserver
+FIELD	AlertBridge	-monitor: AlertMonitor
+FIELD	AlertBridge	-ui: Executor
+FIELD	AlertBridge	-view: MonitorController.View
+METHOD	AlertBridge	~AlertBridge(monitor: AlertMonitor, ui: Executor, view: MonitorController.View)
+METHOD	AlertBridge	+onAlert(alert: AlertMonitor.Alert): void
+TYPE	MonitorController	CLASS	
+FIELD	MonitorController	{static} -LOGGER: Logger
+FIELD	MonitorController	-readings: ReadingService
+FIELD	MonitorController	-reports: ReportStore
+FIELD	MonitorController	-alerts: AlertMonitor
+FIELD	MonitorController	-background: Executor
+FIELD	MonitorController	-ui: Executor
+FIELD	MonitorController	-clock: Clock
+FIELD	MonitorController	-view: View
+FIELD	MonitorController	-listener: PollutionObserver
+FIELD	MonitorController	-refreshing: AtomicBoolean
+FIELD	MonitorController	-saving: AtomicBoolean
+TYPE	MonitorController.View	INTERFACE	
+METHOD	MonitorController.View	{abstract} +loading(value: boolean): void
+METHOD	MonitorController.View	{abstract} +reading(district: District, result: ReadingService.Result, recent: List<Reading>): void
+METHOD	MonitorController.View	{abstract} +reports(entries: List<CitizenReport>): void
+METHOD	MonitorController.View	+reportSaving(value: boolean): void
+METHOD	MonitorController.View	{abstract} +message(message: String, error: boolean): void
+METHOD	MonitorController.View	{abstract} +alert(history: List<AlertMonitor.Alert>, delivered: AlertMonitor.Alert): void
+METHOD	MonitorController	+MonitorController(readings: ReadingService, reports: ReportStore, alerts: AlertMonitor, background: Executor, ui: Executor, clock: Clock, view: View)
+METHOD	MonitorController	+refresh(district: District): void
+METHOD	MonitorController	+refreshAll(): void
+METHOD	MonitorController	-refresh(districts: List<District>): void
+METHOD	MonitorController	-runRefresh(districts: List<District>): void
+METHOD	MonitorController	-fetch(district: District): void
+METHOD	MonitorController	-finishRefresh(): void
+METHOD	MonitorController	-showReading(district: District, result: ReadingService.Result, history: List<Reading>): void
+METHOD	MonitorController	+saveReport(district: District, issue: Issue, text: String): void
+METHOD	MonitorController	-queueSave(report: CitizenReport): void
+METHOD	MonitorController	+loadReports(): void
+METHOD	MonitorController	-persist(report: CitizenReport): void
+METHOD	MonitorController	-finishSave(): void
+METHOD	MonitorController	-showReports(saved: boolean): void
+METHOD	MonitorController	-reportFailure(ex: IOException, message: String): void
+METHOD	MonitorController	+changeThreshold(value: int): void
+METHOD	MonitorController	+subscribe(district: District, enabled: boolean): void
+TYPE	AirCategory	ENUM	
+FIELD	AirCategory	{static} +GOOD: AirCategory
+FIELD	AirCategory	{static} +MODERATE: AirCategory
+FIELD	AirCategory	{static} +SENSITIVE: AirCategory
+FIELD	AirCategory	{static} +UNHEALTHY: AirCategory
+FIELD	AirCategory	{static} +VERY_UNHEALTHY: AirCategory
+FIELD	AirCategory	{static} +HAZARDOUS: AirCategory
+FIELD	AirCategory	-label: String
+FIELD	AirCategory	-upperBound: int
+METHOD	AirCategory	~AirCategory(label: String, upperBound: int)
+METHOD	AirCategory	{static} +from(index: int): AirCategory
+METHOD	AirCategory	+upperBound(): int
+METHOD	AirCategory	+toString(): String
+TYPE	CitizenReport	RECORD	
+FIELD	CitizenReport	-id: UUID
+FIELD	CitizenReport	-district: District
+FIELD	CitizenReport	-issue: Issue
+FIELD	CitizenReport	-description: String
+FIELD	CitizenReport	-createdAt: Instant
+FIELD	CitizenReport	{static} +MIN_DESCRIPTION: int
+FIELD	CitizenReport	{static} +MAX_DESCRIPTION: int
+FIELD	CitizenReport	{static} +DESCRIPTION_RANGE: String
+TYPE	CitizenReport.Issue	ENUM	
+FIELD	CitizenReport.Issue	{static} +SMOKE: Issue
+FIELD	CitizenReport.Issue	{static} +DUST: Issue
+FIELD	CitizenReport.Issue	{static} +ODOUR: Issue
+FIELD	CitizenReport.Issue	{static} +OTHER: Issue
+FIELD	CitizenReport.Issue	-label: String
+METHOD	CitizenReport.Issue	~Issue(label: String)
+METHOD	CitizenReport.Issue	+toString(): String
+METHOD	CitizenReport	+CitizenReport(id: UUID, district: District, issue: Issue, description: String, createdAt: Instant)
+TYPE	CityCatalog	CLASS	
+FIELD	CityCatalog	{static} -DBKL_PARKS: String
+METHOD	CityCatalog	-CityCatalog()
+TYPE	CityCatalog.Park	RECORD	
+FIELD	CityCatalog.Park	-name: String
+FIELD	CityCatalog.Park	-area: String
+FIELD	CityCatalog.Park	-source: URI
+METHOD	CityCatalog	{static} +nearby(district: District): List<Park>
+TYPE	District	ENUM	
+FIELD	District	{static} +TITIWANGSA: District
+FIELD	District	{static} +CITY_CENTRE: District
+FIELD	District	{static} +PERDANA: District
+FIELD	District	-label: String
+FIELD	District	-latitude: double
+FIELD	District	-longitude: double
+METHOD	District	~District(label: String, latitude: double, longitude: double)
+METHOD	District	+latitude(): double
+METHOD	District	+longitude(): double
+METHOD	District	+toString(): String
+TYPE	Reading	RECORD	
+FIELD	Reading	-district: District
+FIELD	Reading	-validAt: Instant
+FIELD	Reading	-fetchedAt: Instant
+FIELD	Reading	-aqi: int
+FIELD	Reading	-pm25: Double
+FIELD	Reading	-pm10: Double
+FIELD	Reading	-nitrogenDioxide: Double
+FIELD	Reading	-ozone: Double
+METHOD	Reading	+Reading(district: District, validAt: Instant, fetchedAt: Instant, aqi: int, pm25: Double, pm10: Double, nitrogenDioxide: Double, ozone: Double)
+METHOD	Reading	+category(): AirCategory
+METHOD	Reading	{static} -validate(value: Double): void
+TYPE	AlertMonitor	CLASS	
+FIELD	AlertMonitor	{static} +DEFAULT_THRESHOLD: int
+FIELD	AlertMonitor	{static} +MINIMUM_THRESHOLD: int
+FIELD	AlertMonitor	{static} +MAXIMUM_THRESHOLD: int
+FIELD	AlertMonitor	{static} -HISTORY_LIMIT: int
+FIELD	AlertMonitor	{static} -LOGGER: Logger
+FIELD	AlertMonitor	-threshold: int
+FIELD	AlertMonitor	-latest: Map<District, Reading>
+FIELD	AlertMonitor	-subscriptions: Map<District, Set<PollutionObserver>>
+FIELD	AlertMonitor	-history: ArrayDeque<Alert>
+TYPE	AlertMonitor.Alert	RECORD	
+FIELD	AlertMonitor.Alert	-district: District
+FIELD	AlertMonitor.Alert	-aqi: int
+FIELD	AlertMonitor.Alert	-threshold: int
+FIELD	AlertMonitor.Alert	-validAt: Instant
+METHOD	AlertMonitor	+AlertMonitor(threshold: int)
+METHOD	AlertMonitor	+setThreshold(value: int): void
+METHOD	AlertMonitor	+subscribe(district: District, observer: PollutionObserver): void
+METHOD	AlertMonitor	+unsubscribe(district: District, observer: PollutionObserver): void
+METHOD	AlertMonitor	+history(): List<Alert>
+METHOD	AlertMonitor	+threshold(): int
+METHOD	AlertMonitor	+publish(reading: Reading): void
+METHOD	AlertMonitor	-crossed(reading: Reading): boolean
+METHOD	AlertMonitor	{static} -notifyListener(listener: PollutionObserver, alert: Alert): void
+TYPE	PollutionObserver	INTERFACE	
+METHOD	PollutionObserver	{abstract} +onAlert(alert: AlertMonitor.Alert): void
+TYPE	JsonFiles	CLASS	
+FIELD	JsonFiles	{static} ~JSON: ObjectMapper
+METHOD	JsonFiles	-JsonFiles()
+METHOD	JsonFiles	{static} ~write(path: Path, content: Object): void
+METHOD	JsonFiles	{static} -replace(temp: Path, path: Path): void
+TYPE	ReadingCache	CLASS	
+FIELD	ReadingCache	-folder: Path
+METHOD	ReadingCache	+ReadingCache(folder: Path)
+METHOD	ReadingCache	+load(district: District): Optional<Reading>
+METHOD	ReadingCache	+save(reading: Reading): void
+METHOD	ReadingCache	-file(district: District): Path
+TYPE	ReportStore	CLASS	
+FIELD	ReportStore	-file: Path
+METHOD	ReportStore	+ReportStore(folder: Path)
+METHOD	ReportStore	+list(): List<CitizenReport>
+METHOD	ReportStore	+save(report: CitizenReport): void
+TYPE	ReadingService	CLASS	
+TYPE	ReadingService.State	ENUM	
+FIELD	ReadingService.State	{static} +LIVE: State
+FIELD	ReadingService.State	{static} +CACHED: State
+FIELD	ReadingService.State	{static} +UNAVAILABLE: State
+TYPE	ReadingService.Result	RECORD	
+FIELD	ReadingService.Result	-state: State
+FIELD	ReadingService.Result	-reading: Reading
+FIELD	ReadingService.Result	-message: String
+METHOD	ReadingService.Result	+Result(state: State, reading: Reading, message: String)
+FIELD	ReadingService	{static} -HISTORY_LIMIT: int
+FIELD	ReadingService	{static} -LOGGER: Logger
+FIELD	ReadingService	-api: AirQualityGateway
+FIELD	ReadingService	-cache: ReadingCache
+FIELD	ReadingService	-monitor: AlertMonitor
+FIELD	ReadingService	-memory: Map<District, Reading>
+FIELD	ReadingService	-history: Map<District, ArrayDeque<Reading>>
+METHOD	ReadingService	+ReadingService(api: AirQualityGateway, cache: ReadingCache, monitor: AlertMonitor)
+METHOD	ReadingService	+refresh(district: District): Result
+METHOD	ReadingService	+history(district: District): List<Reading>
+METHOD	ReadingService	-remember(reading: Reading): void
+METHOD	ReadingService	-fallback(district: District, message: String): Result
+METHOD	ReadingService	-cached(district: District): Reading
+TYPE	AdviceProfile	ENUM	
+FIELD	AdviceProfile	{static} +GENERAL: AdviceProfile
+FIELD	AdviceProfile	{static} +CHILDREN: AdviceProfile
+FIELD	AdviceProfile	{static} +OLDER_ADULTS: AdviceProfile
+FIELD	AdviceProfile	-label: String
+FIELD	AdviceProfile	-strategy: AdviceStrategy
+METHOD	AdviceProfile	~AdviceProfile(label: String, strategy: AdviceStrategy)
+METHOD	AdviceProfile	+strategy(): AdviceStrategy
+METHOD	AdviceProfile	+toString(): String
+TYPE	AdviceStrategy	INTERFACE	
+METHOD	AdviceStrategy	{abstract} +advice(category: AirCategory): String
+TYPE	ChildrenAdvice	CLASS	implements AdviceStrategy
+METHOD	ChildrenAdvice	+advice(category: AirCategory): String
+TYPE	GeneralPublicAdvice	CLASS	implements AdviceStrategy
+METHOD	GeneralPublicAdvice	+advice(category: AirCategory): String
+TYPE	OlderAdultsAdvice	CLASS	implements AdviceStrategy
+METHOD	OlderAdultsAdvice	+advice(category: AirCategory): String
+TYPE	AboutPane	CLASS	extends JPanel
+FIELD	AboutPane	{static} -TEXT_WIDTH: int
+METHOD	AboutPane	~AboutPane()
+METHOD	AboutPane	{static} -legend(): JPanel
+METHOD	AboutPane	{static} -legendRow(category: AirCategory, lower: int): JPanel
+METHOD	AboutPane	{static} -note(title: String, body: String): JPanel
+TYPE	AdvicePane	CLASS	extends JPanel
+FIELD	AdvicePane	{static} -TEXT_WIDTH: int
+FIELD	AdvicePane	-advice: JTextArea
+FIELD	AdvicePane	-cards: Map<AdviceProfile, JPanel>
+FIELD	AdvicePane	-texts: Map<AdviceProfile, JLabel>
+METHOD	AdvicePane	~AdvicePane(profile: JComboBox<AdviceProfile>, advice: JTextArea)
+METHOD	AdvicePane	{static} -selector(profile: JComboBox<AdviceProfile>): JPanel
+METHOD	AdvicePane	-comparison(): JPanel
+METHOD	AdvicePane	~render(district: District, result: Result, source: String, selected: AdviceProfile): void
+METHOD	AdvicePane	{static} -detail(district: District, reading: Reading, source: String, selected: AdviceProfile): String
+TYPE	AlertsPane	CLASS	extends JPanel
+FIELD	AlertsPane	{static} -SETTINGS_WIDTH: int
+FIELD	AlertsPane	{static} -WIDTHS: int[]
+FIELD	AlertsPane	-switches: Map<District, JCheckBox>
+FIELD	AlertsPane	-threshold: JSpinner
+FIELD	AlertsPane	-model: DefaultTableModel
+FIELD	AlertsPane	-table: JTable
+METHOD	AlertsPane	~AlertsPane()
+METHOD	AlertsPane	-settings(): JPanel
+METHOD	AlertsPane	-thresholdCard(): JPanel
+METHOD	AlertsPane	~onSubscription(action: BiConsumer<District, Boolean>): void
+METHOD	AlertsPane	~onThreshold(action: IntConsumer): void
+METHOD	AlertsPane	~setSubscribed(item: District, enabled: boolean): void
+METHOD	AlertsPane	~setThreshold(value: int): void
+METHOD	AlertsPane	~render(history: List<AlertMonitor.Alert>): void
+TYPE	AqiScale	CLASS	extends JPanel
+FIELD	AqiScale	{static} ~SCALE_MAXIMUM: int
+FIELD	AqiScale	{static} -BAR: int
+FIELD	AqiScale	{static} -MARKER: int
+FIELD	AqiScale	{static} -HEIGHT: int
+FIELD	AqiScale	{static} -CATEGORIES: AirCategory[]
+FIELD	AqiScale	-index: Integer
+METHOD	AqiScale	~AqiScale()
+METHOD	AqiScale	~setIndex(value: Integer): void
+METHOD	AqiScale	{static} ~position(aqi: int): double
+METHOD	AqiScale	#paintComponent(graphics: Graphics): void
+METHOD	AqiScale	-paintSegments(g: Graphics2D, top: int): void
+METHOD	AqiScale	-paintTicks(g: Graphics2D, baseline: int): void
+METHOD	AqiScale	-paintMarker(g: Graphics2D, x: int, top: int): void
+TYPE	CategoryPalette	CLASS	
+FIELD	CategoryPalette	{static} -FILL: Map<AirCategory, Color>
+FIELD	CategoryPalette	{static} -DARK_TEXT: Color
+METHOD	CategoryPalette	-CategoryPalette()
+METHOD	CategoryPalette	{static} ~fill(category: AirCategory): Color
+METHOD	CategoryPalette	{static} ~onFill(category: AirCategory): Color
+TYPE	DistrictStrip	CLASS	extends JPanel
+FIELD	DistrictStrip	-cards: Map<District, JPanel>
+FIELD	DistrictStrip	-values: Map<District, JLabel>
+FIELD	DistrictStrip	-categories: Map<District, JLabel>
+FIELD	DistrictStrip	-chooser: Consumer<District>
+METHOD	DistrictStrip	~DistrictStrip()
+METHOD	DistrictStrip	-card(item: District): JPanel
+METHOD	DistrictStrip	{static} -chip(): JLabel
+METHOD	DistrictStrip	{static} -names(item: District, category: JLabel): JPanel
+METHOD	DistrictStrip	-clickable(card: JPanel, item: District): void
+METHOD	DistrictStrip	~onChoose(action: Consumer<District>): void
+METHOD	DistrictStrip	~render(results: Map<District, Result>, selected: District): void
+METHOD	DistrictStrip	{static} -paintCategory(category: JLabel, result: Result, reading: Reading): void
+TYPE	Formats	CLASS	
+FIELD	Formats	{static} ~MISSING: String
+FIELD	Formats	{static} ~DASH: String
+FIELD	Formats	{static} -FULL: DateTimeFormatter
+FIELD	Formats	{static} -SHORT: DateTimeFormatter
+METHOD	Formats	-Formats()
+METHOD	Formats	{static} ~time(value: Instant): String
+METHOD	Formats	{static} ~shortTime(value: Instant): String
+METHOD	Formats	{static} ~quantity(value: Double): String
+METHOD	Formats	{static} ~source(result: Result, fixture: boolean): String
+METHOD	Formats	{static} ~tableSource(result: Result, fixture: boolean): String
+TYPE	MonitorPanel	CLASS	extends JPanel, implements MonitorController.View
+FIELD	MonitorPanel	{static} -WINDOW_WIDTH: int
+FIELD	MonitorPanel	{static} -WINDOW_HEIGHT: int
+FIELD	MonitorPanel	{static} -RAIL_WIDTH: int
+FIELD	MonitorPanel	{static} -TAB_KEY_BASE: int
+FIELD	MonitorPanel	{static} -NO_DATA: String
+FIELD	MonitorPanel	{static} -SAVED: String
+FIELD	MonitorPanel	-tabs: JTabbedPane
+FIELD	MonitorPanel	-district: JComboBox<District>
+FIELD	MonitorPanel	-profile: JComboBox<AdviceProfile>
+FIELD	MonitorPanel	-refresh: JButton
+FIELD	MonitorPanel	-refreshAll: JButton
+FIELD	MonitorPanel	-dashboard: JTextArea
+FIELD	MonitorPanel	-advice: JTextArea
+FIELD	MonitorPanel	-status: JLabel
+FIELD	MonitorPanel	-latestAlert: JLabel
+FIELD	MonitorPanel	-progress: JProgressBar
+FIELD	MonitorPanel	-overview: OverviewPane
+FIELD	MonitorPanel	-monitoring: MonitoringPane
+FIELD	MonitorPanel	-advicePane: AdvicePane
+FIELD	MonitorPanel	-reportsPane: ReportsPane
+FIELD	MonitorPanel	-alertsPane: AlertsPane
+FIELD	MonitorPanel	-results: Map<District, ReadingService.Result>
+FIELD	MonitorPanel	-trends: Map<District, List<Reading>>
+FIELD	MonitorPanel	-settings: ViewPreferences
+FIELD	MonitorPanel	-fixture: boolean
+FIELD	MonitorPanel	-controller: MonitorController
+METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences)
+METHOD	MonitorPanel	+MonitorPanel(preferences: Preferences, fixture: boolean)
+METHOD	MonitorPanel	+bind(controller: MonitorController): void
+METHOD	MonitorPanel	-header(): JPanel
+METHOD	MonitorPanel	{static} -brand(): JPanel
+METHOD	MonitorPanel	-controls(): JPanel
+METHOD	MonitorPanel	-statusBar(): JPanel
+METHOD	MonitorPanel	-addScreens(): void
+METHOD	MonitorPanel	-shortcuts(): void
+METHOD	MonitorPanel	-restoreSettings(): void
+METHOD	MonitorPanel	-selectedDistrict(): District
+METHOD	MonitorPanel	-selectedProfile(): AdviceProfile
+METHOD	MonitorPanel	-changeDistrict(): void
+METHOD	MonitorPanel	-changeProfile(): void
+METHOD	MonitorPanel	-changeSubscription(item: District, enabled: boolean): void
+METHOD	MonitorPanel	-changeThreshold(value: int): void
+METHOD	MonitorPanel	+loading(value: boolean): void
+METHOD	MonitorPanel	+reportSaving(value: boolean): void
+METHOD	MonitorPanel	+reading(item: District, result: ReadingService.Result, recent: List<Reading>): void
+METHOD	MonitorPanel	-renderSelection(): void
+METHOD	MonitorPanel	-dashboardText(result: ReadingService.Result, source: String): String
+METHOD	MonitorPanel	-showReadingStatus(item: District, result: ReadingService.Result): void
+METHOD	MonitorPanel	+reports(entries: List<CitizenReport>): void
+METHOD	MonitorPanel	+message(text: String, error: boolean): void
+METHOD	MonitorPanel	+alert(history: List<AlertMonitor.Alert>, delivered: AlertMonitor.Alert): void
+TYPE	MonitoringPane	CLASS	extends JPanel
+FIELD	MonitoringPane	{static} -DISTRICT_HEIGHT: int
+FIELD	MonitoringPane	{static} -CATEGORY_COLUMN: int
+FIELD	MonitoringPane	{static} -DISTRICT_WIDTHS: int[]
+FIELD	MonitoringPane	{static} -SAMPLE_WIDTHS: int[]
+FIELD	MonitoringPane	-districts: DefaultTableModel
+FIELD	MonitoringPane	-samples: DefaultTableModel
+FIELD	MonitoringPane	-chart: TrendChart
+METHOD	MonitoringPane	~MonitoringPane()
+METHOD	MonitoringPane	~render(selected: District, states: Map<District, Result>, history: List<Reading>, origin: Function<Result, String>, threshold: int): void
+METHOD	MonitoringPane	{static} -districtRow(d: District, result: Result, origin: Function<Result, String>): Object[]
+METHOD	MonitoringPane	{static} -sampleRow(r: Reading): Object[]
+METHOD	MonitoringPane	{static} -value(v: Double): Object
+METHOD	MonitoringPane	{static} -tableModel(headers: String[]): DefaultTableModel
+METHOD	MonitoringPane	{static} -tableFor(model: DefaultTableModel, name: String, widths: int[]): JTable
+TYPE	MonitoringPane.CategoryRenderer	CLASS	extends DefaultTableCellRenderer
+METHOD	MonitoringPane.CategoryRenderer	+getTableCellRendererComponent(table: JTable, value: Object, selected: boolean, focused: boolean, row: int, column: int): Component
+TYPE	NavigationRailUI	CLASS	extends BasicTabbedPaneUI
+FIELD	NavigationRailUI	{static} -RAIL_WIDTH: int
+FIELD	NavigationRailUI	{static} -ITEM_HEIGHT: int
+FIELD	NavigationRailUI	{static} -INDICATOR: int
+FIELD	NavigationRailUI	{static} -TOP_SPACE: int
+METHOD	NavigationRailUI	#installDefaults(): void
+METHOD	NavigationRailUI	#calculateTabWidth(placement: int, index: int, metrics: FontMetrics): int
+METHOD	NavigationRailUI	#calculateTabHeight(placement: int, index: int, fontHeight: int): int
+METHOD	NavigationRailUI	#paintTabArea(g: Graphics, placement: int, selectedIndex: int): void
+METHOD	NavigationRailUI	#paintTabBackground(g: Graphics, placement: int, index: int, x: int, y: int, w: int, h: int, selected: boolean): void
+METHOD	NavigationRailUI	#paintText(g: Graphics, placement: int, font: Font, metrics: FontMetrics, index: int, title: String, textRect: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	#paintTabBorder(g: Graphics, placement: int, index: int, x: int, y: int, w: int, h: int, selected: boolean): void
+METHOD	NavigationRailUI	#paintFocusIndicator(g: Graphics, placement: int, rects: Rectangle[], index: int, iconRect: Rectangle, textRect: Rectangle, selected: boolean): void
+METHOD	NavigationRailUI	#paintContentBorder(g: Graphics, placement: int, selectedIndex: int): void
+TYPE	OverviewPane	CLASS	extends JPanel
+FIELD	OverviewPane	{static} -HERO_WIDTH: int
+FIELD	OverviewPane	{static} -HEADLINE_HEIGHT: int
+FIELD	OverviewPane	{static} -TEXT_WIDTH: int
+FIELD	OverviewPane	-area: JLabel
+FIELD	OverviewPane	-index: JLabel
+FIELD	OverviewPane	-category: JLabel
+FIELD	OverviewPane	-provenance: JLabel
+FIELD	OverviewPane	-scale: AqiScale
+FIELD	OverviewPane	-pm25: JLabel
+FIELD	OverviewPane	-pm10: JLabel
+FIELD	OverviewPane	-no2: JLabel
+FIELD	OverviewPane	-o3: JLabel
+FIELD	OverviewPane	-adviceTitle: JLabel
+FIELD	OverviewPane	-adviceText: JLabel
+FIELD	OverviewPane	-park: JLabel
+FIELD	OverviewPane	-hero: JPanel
+FIELD	OverviewPane	-strip: DistrictStrip
+METHOD	OverviewPane	~OverviewPane(details: JTextArea)
+METHOD	OverviewPane	~onDistrictChosen(action: java.util.function.Consumer<District>): void
+METHOD	OverviewPane	~renderAll(results: java.util.Map<District, Result>, selected: District): void
+METHOD	OverviewPane	-headline(): JPanel
+METHOD	OverviewPane	-chip(): JComponent
+METHOD	OverviewPane	-pollutants(): JPanel
+METHOD	OverviewPane	-guidance(details: JTextArea): JPanel
+METHOD	OverviewPane	~render(district: District, result: Result, source: String, profile: AdviceProfile): void
+METHOD	OverviewPane	-renderCategory(r: Reading): void
+METHOD	OverviewPane	-renderPollutants(r: Reading): void
+METHOD	OverviewPane	{static} -parkText(district: District): String
+METHOD	OverviewPane	{static} -metric(title: String, value: JLabel): JPanel
+METHOD	OverviewPane	{static} -metricValue(name: String): JLabel
+METHOD	OverviewPane	{static} -wrapped(name: String): JLabel
+METHOD	OverviewPane	{static} -html(body: String): String
+TYPE	ReportsPane	CLASS	extends JPanel
+FIELD	ReportsPane	{static} ~ALL_AREAS: String
+FIELD	ReportsPane	{static} -FORM_WIDTH: int
+FIELD	ReportsPane	{static} -DISTRICT_COLUMN: int
+FIELD	ReportsPane	{static} -DESCRIPTION_ROWS: int
+FIELD	ReportsPane	{static} -WIDTHS: int[]
+FIELD	ReportsPane	-district: JComboBox<District>
+FIELD	ReportsPane	-issue: JComboBox<Issue>
+FIELD	ReportsPane	-description: JTextArea
+FIELD	ReportsPane	-counter: JLabel
+FIELD	ReportsPane	-save: JButton
+FIELD	ReportsPane	-filter: JComboBox<Object>
+FIELD	ReportsPane	-total: JLabel
+FIELD	ReportsPane	-model: DefaultTableModel
+FIELD	ReportsPane	-table: JTable
+FIELD	ReportsPane	-sorter: TableRowSorter<DefaultTableModel>
+METHOD	ReportsPane	~ReportsPane()
+METHOD	ReportsPane	-form(): JPanel
+METHOD	ReportsPane	-descriptionField(): JComponent
+METHOD	ReportsPane	-actions(): JPanel
+METHOD	ReportsPane	-history(): JPanel
+METHOD	ReportsPane	-applyFilter(): void
+METHOD	ReportsPane	-updateTotal(): void
+METHOD	ReportsPane	-updateCount(): void
+METHOD	ReportsPane	~render(entries: List<CitizenReport>): void
+METHOD	ReportsPane	~setSaving(value: boolean): void
+METHOD	ReportsPane	~onSave(action: Runnable): void
+METHOD	ReportsPane	~selectDistrict(value: District): void
+METHOD	ReportsPane	~clearDescription(): void
+METHOD	ReportsPane	~district(): District
+METHOD	ReportsPane	~issue(): Issue
+METHOD	ReportsPane	~description(): String
+TYPE	Theme	CLASS	
+FIELD	Theme	{static} ~CANVAS: Color
+FIELD	Theme	{static} ~SURFACE: Color
+FIELD	Theme	{static} ~RAIL: Color
+FIELD	Theme	{static} ~RAIL_SELECTED: Color
+FIELD	Theme	{static} ~TEXT: Color
+FIELD	Theme	{static} ~MUTED: Color
+FIELD	Theme	{static} ~TEAL: Color
+FIELD	Theme	{static} ~TEAL_DARK: Color
+FIELD	Theme	{static} ~LINE: Color
+FIELD	Theme	{static} ~PALE: Color
+FIELD	Theme	{static} ~ERROR_TEXT: Color
+FIELD	Theme	{static} ~ERROR_FILL: Color
+FIELD	Theme	{static} ~AMBER: Color
+FIELD	Theme	{static} ~AMBER_FILL: Color
+FIELD	Theme	{static} ~ON_DARK: Color
+FIELD	Theme	{static} ~GAP: int
+FIELD	Theme	{static} ~PAD: int
+FIELD	Theme	{static} ~SMALL: int
+FIELD	Theme	{static} ~BODY: int
+FIELD	Theme	{static} ~HEADING: int
+FIELD	Theme	{static} ~TITLE: int
+FIELD	Theme	{static} ~HERO: int
+FIELD	Theme	{static} ~ROW: int
+FIELD	Theme	{static} -FONT: String
+METHOD	Theme	-Theme()
+METHOD	Theme	{static} -pickFont(preferred: String[]): String
+METHOD	Theme	{static} ~font(size: int, style: int): Font
+METHOD	Theme	{static} ~label(text: String, size: int, style: int, foreground: Color): JLabel
+METHOD	Theme	{static} ~caption(text: String): JLabel
+METHOD	Theme	{static} ~panel(layout: LayoutManager): JPanel
+METHOD	Theme	{static} ~card(layout: LayoutManager): JPanel
+METHOD	Theme	{static} ~accentBorder(accent: Color): Border
+METHOD	Theme	{static} ~cardBorder(line: Color): Border
+METHOD	Theme	{static} ~titled(title: String, content: JComponent): JPanel
+METHOD	Theme	{static} ~scroll(content: Component): JScrollPane
+METHOD	Theme	{static} ~styleButton(button: AbstractButton, primary: boolean): void
+METHOD	Theme	{static} ~styleCombo(combo: JComboBox<T>): void
+METHOD	Theme	{static} ~screen(title: String, subtitle: String, content: JComponent): JPanel
+METHOD	Theme	{static} ~text(name: String): JTextArea
+METHOD	Theme	{static} ~named(control: T, name: String): T
+METHOD	Theme	{static} ~styleTable(table: JTable): void
+TYPE	TrendChart	CLASS	extends JPanel
+FIELD	TrendChart	{static} -LEFT: int
+FIELD	TrendChart	{static} -RIGHT: int
+FIELD	TrendChart	{static} -TOP: int
+FIELD	TrendChart	{static} -BOTTOM: int
+FIELD	TrendChart	{static} -POINT: int
+FIELD	TrendChart	{static} -MINIMUM_SCALE: double
+FIELD	TrendChart	{static} -TINT: double
+FIELD	TrendChart	{static} -DASH_PATTERN: float[]
+FIELD	TrendChart	-samples: List<Reading>
+FIELD	TrendChart	-threshold: int
+METHOD	TrendChart	~TrendChart()
+METHOD	TrendChart	~setHistory(district: District, history: List<Reading>, alertThreshold: int): void
+METHOD	TrendChart	#paintComponent(graphics: Graphics): void
+METHOD	TrendChart	-plot(g: Graphics2D, width: int, height: int): void
+METHOD	TrendChart	-bands(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-axes(g: Graphics2D, w: int, h: int, max: double): void
+METHOD	TrendChart	-thresholdLine(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-series(g: Graphics2D, width: int, height: int, max: double): void
+METHOD	TrendChart	-timeAxis(g: Graphics2D, start: Instant, end: Instant, width: int, height: int): void
+METHOD	TrendChart	{static} -x(time: Instant, start: Instant, end: Instant, width: int): int
+METHOD	TrendChart	{static} -y(aqi: double, height: int, max: double): int
+METHOD	TrendChart	{static} -tint(colour: Color): Color
+METHOD	TrendChart	{static} -mix(channel: int): int
+TYPE	ViewPreferences	CLASS	
+FIELD	ViewPreferences	{static} -DISTRICT: String
+FIELD	ViewPreferences	{static} -PROFILE: String
+FIELD	ViewPreferences	{static} -THRESHOLD: String
+FIELD	ViewPreferences	{static} -ALERT: String
+FIELD	ViewPreferences	-store: Preferences
+METHOD	ViewPreferences	~ViewPreferences(store: Preferences)
+METHOD	ViewPreferences	~district(): District
+METHOD	ViewPreferences	~profile(): AdviceProfile
+METHOD	ViewPreferences	~subscribed(item: District): boolean
+METHOD	ViewPreferences	~threshold(): int
+METHOD	ViewPreferences	~saveDistrict(value: District): void
+METHOD	ViewPreferences	~saveProfile(value: AdviceProfile): void
+METHOD	ViewPreferences	~saveSubscription(item: District, enabled: boolean): void
+METHOD	ViewPreferences	~saveThreshold(value: int): void
+METHOD	ViewPreferences	-saved(type: Class<E>, key: String, fallback: E): E

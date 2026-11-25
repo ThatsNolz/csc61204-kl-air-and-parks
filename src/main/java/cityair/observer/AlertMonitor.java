@@ -18,9 +18,13 @@ import java.util.logging.Logger;
 public final class AlertMonitor {
     /** Start of the U.S. AQI sensitive-groups category. */
     public static final int DEFAULT_THRESHOLD = 101;
+    /** Lowest threshold a user may choose. */
+    public static final int MINIMUM_THRESHOLD = 1;
+    /** Highest threshold a user may choose: the top of the U.S. AQI scale. */
+    public static final int MAXIMUM_THRESHOLD = 500;
     private static final int HISTORY_LIMIT = 100;
     private static final Logger LOGGER = Logger.getLogger(AlertMonitor.class.getName());
-    private final int threshold;
+    private int threshold;
     private final Map<District, Reading> latest = new EnumMap<>(District.class);
     private final Map<District, Set<PollutionObserver>> subscriptions = new EnumMap<>(District.class);
     private final ArrayDeque<Alert> history = new ArrayDeque<>();
@@ -28,10 +32,21 @@ public final class AlertMonitor {
     /** Alert as displayed by the notification view. */
     public record Alert(District district, int aqi, int threshold, Instant validAt) {}
 
-    /** Creates a monitor with a fixed positive U.S. AQI alert threshold. */
+    /** Creates a monitor with a positive U.S. AQI alert threshold. */
     public AlertMonitor(int threshold) {
         if (threshold <= 0) throw new IllegalArgumentException("Threshold must be positive.");
         this.threshold = threshold;
+    }
+
+    /**
+     * Changes the threshold used for later readings. A district already at or above the new value
+     * is not alerted again until it falls below the threshold and crosses it on a fresh model hour.
+     */
+    public synchronized void setThreshold(int value) {
+        if (value < MINIMUM_THRESHOLD || value > MAXIMUM_THRESHOLD) {
+            throw new IllegalArgumentException("Threshold must be between " + MINIMUM_THRESHOLD + " and " + MAXIMUM_THRESHOLD + ".");
+        }
+        threshold = value;
     }
 
     /** Registers an observer once for a district. */
@@ -49,8 +64,8 @@ public final class AlertMonitor {
     /** Returns a snapshot of alerts, newest first. */
     public synchronized List<Alert> history() { return List.copyOf(history); }
 
-    /** Returns the fixed crossing threshold. */
-    public int threshold() { return threshold; }
+    /** Returns the current crossing threshold. */
+    public synchronized int threshold() { return threshold; }
 
     /** Publishes a fresh model hour and calls subscriber code outside the monitor lock. */
     public void publish(Reading reading) {
