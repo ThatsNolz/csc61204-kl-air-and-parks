@@ -115,7 +115,9 @@ final class TrendChart extends JPanel {
 
     private void timeAxis(Graphics2D g, Instant start, Instant end, int width, int height) {
         g.setColor(MUTED);
-        g.drawString(Formats.shortTime(start), LEFT, TOP + height + GAP + 2);
+        var first = Formats.shortTime(start);
+        int firstX = end.equals(start) ? LEFT + (width - g.getFontMetrics().stringWidth(first)) / 2 : LEFT;
+        g.drawString(first, firstX, TOP + height + GAP + 2);
         if (end.equals(start) || width < 170) return;
         var last = Formats.shortTime(end);
         g.drawString(last, LEFT + width - g.getFontMetrics().stringWidth(last), TOP + height + GAP + 2);
@@ -123,7 +125,7 @@ final class TrendChart extends JPanel {
 
     private static int x(Instant time, Instant start, Instant end, int width) {
         long span = end.getEpochSecond() - start.getEpochSecond();
-        double offset = span == 0 ? 0 : (time.getEpochSecond() - start.getEpochSecond()) / (double) span;
+        double offset = span == 0 ? 0.5 : (time.getEpochSecond() - start.getEpochSecond()) / (double) span;
         return LEFT + (int) (width * offset);
     }
 
