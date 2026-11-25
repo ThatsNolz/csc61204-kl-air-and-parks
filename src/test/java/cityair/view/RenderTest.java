@@ -86,7 +86,7 @@ class RenderTest {
         });
     }
 
-    @Test void bothThemes_paintTheSameScreenDifferently() throws Exception {
+    @Test void theme_switchedToLight_paintsTheSameScreenDifferently() throws Exception {
         onEdt(() -> {
             var panel = loaded();
             applyTheme(panel, AuroraTheme.DARK);
@@ -99,7 +99,7 @@ class RenderTest {
         });
     }
 
-    @Test void reducedMotion_appliesEveryAnimationImmediately() throws Exception {
+    @Test void motion_reducedMotionEnabled_appliesEveryAnimationImmediately() throws Exception {
         onEdt(() -> {
             var panel = loaded();
             ((javax.swing.AbstractButton) Components.require(panel, "reducedMotion")).doClick(0);
@@ -120,7 +120,7 @@ class RenderTest {
         });
     }
 
-    @Test void extremeIndex_paintsTheTopOfTheScaleWithoutOverflowing() throws Exception {
+    @Test void overview_extremeIndex_paintsTheTopOfTheScaleWithoutOverflowing() throws Exception {
         onEdt(() -> {
             var panel = panel();
             var hazardous = new Reading(District.TITIWANGSA, NOW, NOW, 820, 400.0, 500.0, 300.0, 400.0);
@@ -147,7 +147,7 @@ class RenderTest {
         });
     }
 
-    @Test void collapsedRail_paintsIconsOnlyAndStaysNarrow() throws Exception {
+    @Test void navigationRail_collapsed_paintsIconsOnlyAndStaysNarrow() throws Exception {
         onEdt(() -> {
             var panel = loaded();
             paint(panel, 1420, 900);
