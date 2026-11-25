@@ -144,11 +144,9 @@ def graph(title, nodes, edges, types, members, consts, compact=(), rankdir="TB",
 def main(tsv, out):
     types, members, consts = load(tsv)
     out = Path(out)
-    service = ["ReadingService", "ReadingService.Result", "ReadingService.State", "AirQualityGateway",
-               "OpenMeteoClient", "ApiFailure", "ApiFailure.Kind", "Exception", "ReadingCache", "Reading", "AlertMonitor"]
+    service = ["ReadingService", "ReadingService.Result", "ReadingService.State", "ReadingCache", "Reading",
+               "AirQualityGateway", "AlertMonitor"]
     service_edges = [
-        ("OpenMeteoClient", "AirQualityGateway", "realize"),
-        ("ApiFailure", "Exception", "extend"),
         ("ReadingService", "AirQualityGateway", "aggregate", "api", "1", "1"),
         ("ReadingService", "ReadingCache", "aggregate", "cache", "1", "1"),
         ("ReadingService", "AlertMonitor", "aggregate", "monitor", "1", "1"),
@@ -156,15 +154,21 @@ def main(tsv, out):
         ("ReadingService", "ReadingService.Result", "depend", "«create»"),
         ("ReadingService.Result", "ReadingService.State", "assoc", "state", "", "1"),
         ("ReadingService.Result", "Reading", "assoc", "reading", "", "0..1"),
+        ("ReadingCache", "Reading", "depend", "load / save"),
+    ]
+    (out / "class-service.dot").write_text(graph("Service", service, service_edges, types, members, consts,
+        compact={"AlertMonitor", "AirQualityGateway"}, rankdir="LR"), encoding="utf-8")
+
+    api = ["AirQualityGateway", "OpenMeteoClient", "ApiFailure", "ApiFailure.Kind", "Exception", "Reading"]
+    api_edges = [
+        ("OpenMeteoClient", "AirQualityGateway", "realize"),
+        ("ApiFailure", "Exception", "extend"),
         ("OpenMeteoClient", "ApiFailure", "depend", "«throw»"),
         ("OpenMeteoClient", "Reading", "depend", "«create»"),
         ("ApiFailure", "ApiFailure.Kind", "assoc", "kind", "", "1"),
-        ("ReadingCache", "Reading", "depend", "load / save"),
     ]
-    (out / "class-service-api.dot").write_text(graph("Service and API", service, service_edges, types, members, consts,
-                                                     compact={"AlertMonitor"}, ranks=[
-        ["ReadingService", "AlertMonitor"], ["AirQualityGateway", "ReadingCache", "ReadingService.Result"],
-        ["OpenMeteoClient", "Reading", "ReadingService.State"], ["ApiFailure", "ApiFailure.Kind", "Exception"]]), encoding="utf-8")
+    (out / "class-api.dot").write_text(graph("API", api, api_edges, types, members, consts, compact={"Reading"},
+                                             rankdir="LR"), encoding="utf-8")
 
     controller = ["MonitorController", "MonitorController.View", "AlertBridge", "ReadingService", "ReportStore",
                   "CitizenReport", "AlertMonitor"]
@@ -177,8 +181,8 @@ def main(tsv, out):
         ("ReportStore", "CitizenReport", "depend", "list / save"),
     ]
     (out / "class-controller.dot").write_text(graph("Controller", controller, controller_edges, types, members, consts,
-        compact={"ReadingService", "AlertBridge", "AlertMonitor"}, ranks=[
-        ["MonitorController", "MonitorController.View"], ["ReadingService", "ReportStore", "AlertBridge", "AlertMonitor"]]),
+        compact={"ReadingService", "AlertBridge", "AlertMonitor", "CitizenReport"}, rankdir="LR", ranks=[
+        ]), 
         encoding="utf-8")
 
     observer = ["AlertMonitor", "AlertMonitor.Alert", "PollutionObserver", "AlertBridge", "MonitorController.View",
