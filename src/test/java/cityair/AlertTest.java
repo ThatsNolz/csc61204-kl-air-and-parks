@@ -3,6 +3,8 @@ package cityair;
 import cityair.model.District;
 import cityair.observer.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.util.ArrayList;
 import static cityair.DomainTest.reading;
 import static cityair.model.District.*;
@@ -61,5 +63,24 @@ class AlertTest {
     }
     @Test void constructor_nonPositiveThreshold_throws() {
         assertThrows(IllegalArgumentException.class, () -> new AlertMonitor(0));
+    }
+    @ParameterizedTest @ValueSource(ints = {0, -5, 501})
+    void setThreshold_outsideAqiScale_throws(int value) {
+        assertThrows(IllegalArgumentException.class, () -> monitor.setThreshold(value));
+        assertEquals(AlertMonitor.DEFAULT_THRESHOLD, monitor.threshold());
+    }
+    @Test void setThreshold_lowered_alertsOnNextFreshCrossing() {
+        monitor.subscribe(TITIWANGSA, observer);
+        monitor.publish(reading(TITIWANGSA, 60, 0));
+        monitor.setThreshold(70);
+        monitor.publish(reading(TITIWANGSA, 75, 60));
+        assertAll(() -> assertEquals(1, delivered.size()), () -> assertEquals(70, delivered.get(0).threshold()));
+    }
+    @Test void setThreshold_alreadyAboveNewValue_waitsForFreshCrossing() {
+        monitor.subscribe(TITIWANGSA, observer);
+        monitor.publish(reading(TITIWANGSA, 90, 0));
+        monitor.setThreshold(80);
+        monitor.publish(reading(TITIWANGSA, 95, 60));
+        assertTrue(delivered.isEmpty());
     }
 }
